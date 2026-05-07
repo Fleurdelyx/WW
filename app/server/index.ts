@@ -115,7 +115,7 @@ io.on('connection', (socket) => {
     broadcastLobbyState(room);
   });
 
-  socket.on('startGame', (settings?: { hasSeer: boolean }) => {
+  socket.on('startGame', (settings?: Partial<{ hasSeer: boolean; hasBodyguard: boolean; hasHunter: boolean; hasWitch: boolean; hasAlphaWolf: boolean; hasSorcerer: boolean; hasMinion: boolean; nightTimerSeconds: number; discussionTimerSeconds: number }>) => {
     const roomCode = socketToRoom.get(socket.id);
     if (!roomCode) return;
     const room = rooms.get(roomCode);
@@ -196,6 +196,62 @@ io.on('connection', (socket) => {
     broadcastRoomState(room);
   });
 
+  socket.on('bodyguardAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.submitBodyguardAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('witchAction', ({ healTarget, poisonTarget }: { healTarget: string | null; poisonTarget: string | null }) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.submitWitchAction(playerId, healTarget, poisonTarget);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('sorcererAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.submitSorcererAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('alphaWolfAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.submitAlphaWolfAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
   socket.on('startVoting', () => {
     const roomCode = socketToRoom.get(socket.id);
     if (!roomCode) return;
@@ -205,6 +261,21 @@ io.on('connection', (socket) => {
 
     room.phase = 'voting';
     room.screen = 'day';
+    broadcastRoomState(room);
+  });
+
+  socket.on('voteSkip', () => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.submitSkipVote(playerId);
+    if (room.shouldSkipToVote()) {
+      room.phase = 'voting';
+      room.screen = 'day';
+    }
     broadcastRoomState(room);
   });
 

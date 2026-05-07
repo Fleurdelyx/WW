@@ -1,64 +1,94 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import { useState, useRef, useEffect } from 'react';
-import { Sun, Users, MessageSquare, Vote, Skull, Send } from 'lucide-react';
+import { Sun, Users, MessageSquare, Vote, Skull, Send, Clock, FastForward, Zap, Flame } from 'lucide-react';
 import type { Player } from '@/types/game';
+import PlayerAvatar from '@/components/PlayerAvatar';
+import CountdownRing from '@/components/CountdownRing';
+import AnimatedPlayerCard from '@/components/AnimatedPlayerCard';
+import ParticleBackground, { FogLayer } from '@/components/ParticleBackground';
+import { ToastContainer, useToasts } from '@/components/ToastNotification';
+import { getTrueFaction } from '@/engine/gameEngine';
 
-function PlayerCard({ player, isSelected, onClick, voteCount, showRole }: {
-  player: Player; isSelected: boolean; onClick: () => void; voteCount: number; showRole: boolean;
-}) {
+function ChatBubble({ msg, humanId }: { msg: { senderId: string; senderName: string; message: string }; humanId: string }) {
+  const isMe = msg.senderId === humanId;
   return (
-    <motion.button
-      onClick={onClick}
-      whileHover={player.isAlive ? { scale: 1.05, y: -2 } : {}}
-      whileTap={player.isAlive ? { scale: 0.95 } : {}}
-      className={`relative p-3 rounded-xl border-2 text-center transition-all ${
-        !player.isAlive
-          ? 'border-dead-gray/50 bg-dead-gray/20 opacity-50'
-          : isSelected
-          ? 'border-accent-gold bg-accent-gold/20 shadow-[0_0_20px_rgba(212,168,67,0.3)]'
-          : 'border-accent-purple/30 bg-bg-secondary/80 hover:border-accent-purple/60'
-      }`}
-      disabled={!player.isAlive}
+    <motion.div
+      initial={{ opacity: 0, x: isMe ? 30 : -30, scale: 0.9 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+      className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
     >
-      <div className="text-2xl mb-1 relative">
-        {player.isAlive ? player.avatar : <Skull className="w-6 h-6 mx-auto text-dead-gray" />}
-        {voteCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent-gold text-[#1A1833] text-xs font-bold rounded-full flex items-center justify-center">
-            {voteCount}
-          </span>
-        )}
+      <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-xs ${
+        isMe
+          ? 'bg-accent-purple/30 text-accent-gold rounded-br-md border border-accent-purple/30'
+          : 'bg-bg-elevated/60 text-text-secondary rounded-bl-md border border-accent-purple/20'
+      }`}>
+        <span className={`font-bold block mb-0.5 ${isMe ? 'text-accent-gold' : 'text-text-primary'}`}>{msg.senderName}</span>
+        {msg.message}
       </div>
-      <div className={`text-xs font-medium truncate ${player.isAlive ? 'text-text-primary' : 'text-text-muted line-through'}`}>
-        {player.name}
-      </div>
-      {!player.isAlive && (
-        <div className="text-[10px] text-dead-gray mt-0.5">eliminated</div>
-      )}
-    </motion.button>
+    </motion.div>
   );
 }
 
 export default function DayScreen() {
-  const { state, castVote, sendChat, startVoting } = useGameStore();
-  const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost } = state;
+  const { state, castVote, sendChat, startVoting, voteSkipDiscussion } = useGameStore();
+  const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost, settings, skipVotes } = state;
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [localPhase, setLocalPhase] = useState<'discussion' | 'voting'>('discussion');
   const [chatInput, setChatInput] = useState('');
+  const [discussionTimer, setDiscussionTimer] = useState(settings.discussionTimerSeconds);
+  const [tensionShake, setTensionShake] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const human = players.find(p => p.id === humanPlayerId);
+  const { toasts, addToast, removeToast } = useToasts();
 
   const isOnline = mode === 'online';
   const phase = isOnline ? (gamePhase === 'voting' ? 'voting' : 'discussion') : localPhase;
 
   const alivePlayers = players.filter(p => p.isAlive);
   const aliveCount = alivePlayers.length;
-  const wolfCount = state.aliveWerewolfCount ?? alivePlayers.filter(p => p.faction === 'werewolf').length;
+  const wolfCount = state.aliveWerewolfCount ?? alivePlayers.filter(p => getTrueFaction(p.role) === 'werewolf').length;
 
   const prevVoteCounts = executionResult?.voteCounts || {};
 
+  // Tension shake effect during voting
+  useEffect(() => {
+    if (phase === 'voting') {
+      const interval = setInterval(() => {
+        setTensionShake(Math.random() * 2 - 1);
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [phase]);
+
+  // Discussion timer
+  useEffect(() => {
+    if (phase !== 'discussion') return;
+    const interval = setInterval(() => {
+      setDiscussionTimer(t => {
+        if (t <= 1) {
+          clearInterval(interval);
+          if (!isOnline) {
+            setLocalPhase('voting');
+            addToast('Time is up! Voting begins.', 'system');
+          }
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase, isOnline, addToast]);
+
+  useEffect(() => {
+    setDiscussionTimer(settings.discussionTimerSeconds);
+  }, [round, settings.discussionTimerSeconds]);
+
   const handleVote = () => {
     if (selectedTarget) {
+      const targetName = players.find(p => p.id === selectedTarget)?.name;
+      addToast(`You voted to eliminate ${targetName}`, 'vote');
       castVote(selectedTarget);
     }
   };
@@ -68,6 +98,7 @@ export default function DayScreen() {
       startVoting();
     } else {
       setLocalPhase('voting');
+      addToast('Voting has begun!', 'system');
     }
   };
 
@@ -78,66 +109,141 @@ export default function DayScreen() {
     }
   };
 
+  const handleSkipVote = () => {
+    voteSkipDiscussion();
+    addToast('You voted to skip discussion', 'system');
+  };
+
   const relevantLogs = logs.filter(l => l.round === round || l.type === 'death');
   const currentChat = (chatMessages || []).filter(m => m.round === round);
+
+  const skipCount = Object.keys(skipVotes).length;
+  const majority = Math.floor(aliveCount / 2) + 1;
+  const hasSkipVoted = !!skipVotes[humanPlayerId];
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs, chatMessages, round]);
 
+  useEffect(() => {
+    if (!isOnline && phase === 'discussion' && skipCount >= majority) {
+      setLocalPhase('voting');
+      addToast('Majority voted to skip! Voting begins.', 'system');
+    }
+  }, [skipCount, majority, phase, isOnline, addToast]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col">
+    <motion.div
+      className="min-h-screen bg-bg-primary flex flex-col relative"
+      animate={{ x: tensionShake }}
+      transition={{ duration: 0.1 }}
+    >
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+      <FogLayer />
+      <ParticleBackground count={20} color="rgba(212,168,67,0.1)" />
+
       {/* Top Bar */}
-      <div className="bg-bg-secondary/80 border-b border-accent-purple/20 px-4 py-3">
+      <motion.div
+        className="bg-bg-secondary/80 border-b border-accent-purple/20 px-4 py-3 backdrop-blur-sm"
+        initial={{ y: -50 }}
+        animate={{ y: 0 }}
+        transition={{ type: 'spring' }}
+      >
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sun className="w-5 h-5 text-accent-gold" />
-            <span className="font-cinzel text-accent-gold font-semibold">Day {round}</span>
-          </div>
+          <motion.div className="flex items-center gap-2" whileHover={{ scale: 1.05 }}>
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+            >
+              <Sun className="w-5 h-5 text-accent-gold" />
+            </motion.div>
+            <span className="font-cinzel text-accent-gold font-semibold text-lg">Day {round}</span>
+          </motion.div>
           <div className="flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-1 text-text-secondary">
+            {phase === 'discussion' && (
+              <motion.div
+                className="flex items-center gap-1"
+                animate={discussionTimer <= 30 ? { x: [0, -2, 2, 0] } : {}}
+                transition={{ duration: 0.3, repeat: discussionTimer <= 30 ? Infinity : 0 }}
+              >
+                <Clock className={`w-4 h-4 ${discussionTimer <= 30 ? 'text-werewolf-red' : 'text-text-secondary'}`} />
+                <span className={discussionTimer <= 30 ? 'text-werewolf-red font-bold animate-pulse' : 'text-text-secondary'}>
+                  {formatTime(discussionTimer)}
+                </span>
+              </motion.div>
+            )}
+            <motion.div className="flex items-center gap-1 text-text-secondary" whileHover={{ scale: 1.1 }}>
               <Users className="w-4 h-4" />
               <span>{aliveCount} alive</span>
-            </div>
-            <div className="flex items-center gap-1 text-werewolf-red">
+            </motion.div>
+            <motion.div className="flex items-center gap-1 text-werewolf-red" whileHover={{ scale: 1.1 }}>
               <Skull className="w-4 h-4" />
               <span>{wolfCount} wolves</span>
-            </div>
+            </motion.div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Main Content */}
       <div className="flex-1 max-w-4xl mx-auto w-full px-4 py-4 flex flex-col gap-4">
         {/* Status Banner */}
         <motion.div
-          className="bg-accent-blue/10 border border-accent-blue/30 rounded-lg p-3 text-center"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
+          className="bg-accent-blue/10 border border-accent-blue/30 rounded-xl p-3 text-center backdrop-blur-sm"
+          initial={{ opacity: 0, y: -10, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring' }}
         >
           {phase === 'discussion' ? (
-            <p className="text-text-primary text-sm">
-              <MessageSquare className="w-4 h-4 inline mr-1 text-accent-blue" />
-              Discuss who you suspect! Chat below, then start voting.
-            </p>
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+              <motion.p className="text-text-primary text-sm" animate={{ opacity: [0.8, 1, 0.8] }} transition={{ duration: 3, repeat: Infinity }}>
+                <MessageSquare className="w-4 h-4 inline mr-1 text-accent-blue" />
+                Discuss who you suspect! Chat below, then start voting.
+              </motion.p>
+              <motion.div
+                className="flex items-center gap-2 text-xs text-text-muted bg-bg-secondary/60 px-3 py-1 rounded-full"
+                whileHover={{ scale: 1.05 }}
+              >
+                <FastForward className="w-3 h-3" />
+                <span>{skipCount}/{majority} skip votes</span>
+                <motion.div className="w-16 h-1.5 bg-bg-elevated rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-accent-gold rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, (skipCount / majority) * 100)}%` }}
+                    transition={{ type: 'spring' }}
+                  />
+                </motion.div>
+              </motion.div>
+            </div>
           ) : (
-            <p className="text-text-primary text-sm">
-              <Vote className="w-4 h-4 inline mr-1 text-accent-gold" />
+            <motion.p
+              className="text-text-primary text-sm font-medium"
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+            >
+              <motion.span
+                animate={{ rotate: [0, 15, -15, 0] }}
+                transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }}
+              >
+                <Vote className="w-4 h-4 inline mr-1 text-accent-gold" />
+              </motion.span>
               Voting is open! Choose who to eliminate.
-            </p>
+            </motion.p>
           )}
         </motion.div>
 
         {/* Player Grid */}
-        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-          {players.map((player, i) => (
-            <motion.div
-              key={player.id}
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.05 }}
-            >
-              <PlayerCard
+        <motion.div className="grid grid-cols-3 sm:grid-cols-4 gap-3" layout>
+          <AnimatePresence mode="popLayout">
+            {players.map((player, i) => (
+              <AnimatedPlayerCard
+                key={player.id}
                 player={player}
                 isSelected={phase === 'voting' && selectedTarget === player.id}
                 onClick={() => {
@@ -146,109 +252,158 @@ export default function DayScreen() {
                   }
                 }}
                 voteCount={prevVoteCounts[player.id] || 0}
-                showRole={false}
+                index={i}
               />
-            </motion.div>
-          ))}
-        </div>
+            ))}
+          </AnimatePresence>
+        </motion.div>
 
         {/* Chat / Log Panel */}
-        <div className="flex-1 min-h-0 flex flex-col">
-          <div className="bg-bg-secondary/60 border border-accent-purple/20 rounded-lg flex flex-col h-56">
+        <motion.div
+          className="flex-1 min-h-0 flex flex-col"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <div className="bg-bg-secondary/60 border border-accent-purple/20 rounded-xl flex flex-col h-64 backdrop-blur-sm overflow-hidden">
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-              {/* Chat messages */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
               <AnimatePresence>
-                {currentChat.map(msg => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className={`text-xs ${msg.senderId === humanPlayerId ? 'text-accent-gold' : 'text-text-secondary'}`}
-                  >
-                    <span className="font-semibold">{msg.senderName}:</span>{' '}
-                    {msg.message}
-                  </motion.div>
+                {currentChat.map((msg, i) => (
+                  <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
                 ))}
               </AnimatePresence>
-              {/* System logs */}
               {relevantLogs.slice(-15).map(log => (
-                <div key={log.id} className={`text-xs ${
-                  log.type === 'death' ? 'text-werewolf-red' :
-                  log.type === 'vote' ? 'text-accent-gold' :
-                  log.type === 'reveal' ? 'text-accent-purple' :
-                  'text-text-secondary'
-                }`}>
-                  <span className="text-text-muted">[D{log.round}]</span>{' '}
+                <motion.div
+                  key={log.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={`text-xs px-2 py-1 rounded ${
+                    log.type === 'death' ? 'text-werewolf-red bg-werewolf-red/10' :
+                    log.type === 'vote' ? 'text-accent-gold bg-accent-gold/10' :
+                    log.type === 'reveal' ? 'text-accent-purple bg-accent-purple/10' :
+                    log.type === 'chat' ? 'text-text-secondary' :
+                    'text-text-secondary bg-bg-elevated/30'
+                  }`}
+                >
+                  <span className="text-text-muted text-[10px]">[D{log.round}]</span>{' '}
                   {log.message}
-                </div>
+                </motion.div>
               ))}
               <div ref={chatEndRef} />
             </div>
 
             {/* Chat input */}
-            {phase === 'discussion' && (
-              <div className="border-t border-accent-purple/20 p-2 flex gap-2">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSendChat()}
-                  placeholder="Say something..."
-                  className="flex-1 bg-bg-primary border border-accent-purple/30 rounded px-3 py-2 text-text-primary text-sm placeholder:text-text-muted focus:border-accent-purple focus:outline-none"
-                />
-                <button
-                  onClick={handleSendChat}
-                  disabled={!chatInput.trim()}
-                  className="bg-accent-purple hover:bg-accent-purple/80 disabled:bg-bg-elevated disabled:text-text-muted text-white px-3 py-2 rounded transition-all"
+            <AnimatePresence>
+              {phase === 'discussion' && (
+                <motion.div
+                  className="border-t border-accent-purple/20 p-2 flex gap-2"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
                 >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+                  <motion.input
+                    type="text"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+                    placeholder="Say something..."
+                    className="flex-1 bg-bg-primary border border-accent-purple/30 rounded-lg px-3 py-2 text-text-primary text-sm placeholder:text-text-muted focus:border-accent-purple focus:outline-none"
+                    whileFocus={{ scale: 1.01, borderColor: 'rgba(123,109,141,0.8)' }}
+                  />
+                  <motion.button
+                    onClick={handleSendChat}
+                    disabled={!chatInput.trim()}
+                    whileHover={{ scale: 1.1, rotate: -10 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="bg-accent-purple hover:bg-accent-purple/80 disabled:bg-bg-elevated disabled:text-text-muted text-white px-3 py-2 rounded-lg transition-all"
+                  >
+                    <Send className="w-4 h-4" />
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        </div>
+        </motion.div>
 
         {/* Action Buttons */}
-        <div className="pb-4">
-          {phase === 'discussion' ? (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleStartVoting}
-              disabled={isOnline && !isHost}
-              className="w-full flex items-center justify-center gap-2 bg-accent-gold hover:bg-accent-gold/90 disabled:bg-bg-elevated disabled:text-text-muted text-[#1A1833] font-bold py-3 rounded-lg transition-all"
-            >
-              <Vote className="w-5 h-5" />
-              {isOnline && !isHost ? 'Waiting for host...' : 'Start Voting'}
-            </motion.button>
-          ) : (
-            <div className="space-y-2">
-              {selectedTarget && (
-                <p className="text-center text-text-secondary text-sm">
-                  You are voting to eliminate: <span className="text-accent-gold font-semibold">
-                    {players.find(p => p.id === selectedTarget)?.name}
-                  </span>
-                </p>
-              )}
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={handleVote}
-                disabled={!selectedTarget}
-                className={`w-full py-3 rounded-lg font-bold transition-all ${
-                  selectedTarget
-                    ? 'bg-werewolf-red hover:bg-werewolf-red/90 text-white shadow-[0_0_15px_rgba(139,58,58,0.4)]'
-                    : 'bg-bg-elevated text-text-muted cursor-not-allowed'
-                }`}
-              >
-                <Skull className="w-4 h-4 inline mr-2" />
-                Cast Vote
-              </motion.button>
-            </div>
-          )}
-        </div>
+        <motion.div className="pb-4 space-y-2" layout>
+          <AnimatePresence mode="wait">
+            {phase === 'discussion' ? (
+              <motion.div key="discussion-actions" className="space-y-2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                <motion.button
+                  whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={handleSkipVote}
+                  disabled={hasSkipVoted}
+                  className="w-full flex items-center justify-center gap-2 bg-bg-elevated hover:bg-bg-elevated/80 disabled:opacity-50 text-text-secondary font-medium py-2.5 rounded-xl transition-all text-sm border border-accent-purple/20"
+                >
+                  <motion.div animate={{ x: [0, 3, 0] }} transition={{ duration: 1, repeat: Infinity }}>
+                    <FastForward className="w-4 h-4" />
+                  </motion.div>
+                  {hasSkipVoted ? `Skip voted (${skipCount}/${majority})` : `Vote to Skip Discussion (${skipCount}/${majority})`}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(212,168,67,0.4)' }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleStartVoting}
+                  disabled={isOnline && !isHost}
+                  className="w-full flex items-center justify-center gap-2 bg-accent-gold hover:bg-accent-gold/90 disabled:bg-bg-elevated disabled:text-text-muted text-[#1A1833] font-bold py-4 rounded-xl transition-all text-lg"
+                >
+                  <motion.div
+                    animate={{ rotate: [0, 15, -15, 0] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <Vote className="w-5 h-5" />
+                  </motion.div>
+                  {isOnline && !isHost ? 'Waiting for host...' : 'Start Voting'}
+                </motion.button>
+              </motion.div>
+            ) : (
+              <motion.div key="voting-actions" className="space-y-2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                <AnimatePresence>
+                  {selectedTarget && (
+                    <motion.p
+                      className="text-center text-text-secondary text-sm"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                    >
+                      You are voting to eliminate:{' '}
+                      <motion.span
+                        className="text-accent-gold font-semibold"
+                        animate={{ scale: [1, 1.1, 1] }}
+                        transition={{ duration: 1, repeat: Infinity }}
+                      >
+                        {players.find(p => p.id === selectedTarget)?.name}
+                      </motion.span>
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+                <motion.button
+                  whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(139,58,58,0.5)' }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleVote}
+                  disabled={!selectedTarget}
+                  className={`w-full py-4 rounded-xl font-bold transition-all text-lg flex items-center justify-center gap-2 ${
+                    selectedTarget
+                      ? 'bg-werewolf-red hover:bg-werewolf-red/90 text-white shadow-[0_0_20px_rgba(139,58,58,0.4)]'
+                      : 'bg-bg-elevated text-text-muted cursor-not-allowed'
+                  }`}
+                >
+                  <motion.div
+                    animate={selectedTarget ? { rotate: [0, 10, -10, 0] } : {}}
+                    transition={{ duration: 0.5, repeat: Infinity }}
+                  >
+                    <Skull className="w-5 h-5" />
+                  </motion.div>
+                  Cast Vote
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -1,20 +1,30 @@
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
-import { getRoleDescription, getRoleName } from '@/engine/gameEngine';
-import { Shield, Eye, Skull } from 'lucide-react';
+import { getRoleDescription, getTrueFaction } from '@/engine/gameEngine';
+import { ChevronRight } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import RoleCard from '@/components/RoleCard';
+import SpinningWheel from '@/components/SpinningWheel';
+import ParticleBackground from '@/components/ParticleBackground';
+
+type RevealPhase = 'wheel' | 'revealing' | 'card';
 
 export default function RoleRevealScreen() {
   const { state, startNight, playerReady } = useGameStore();
   const humanPlayer = state.players.find(p => p.id === state.humanPlayerId);
-  const [flipped, setFlipped] = useState(false);
-  const [canContinue, setCanContinue] = useState(false);
+  const [phase, setPhase] = useState<RevealPhase>('wheel');
+  const [showContinue, setShowContinue] = useState(false);
 
   useEffect(() => {
-    const t1 = setTimeout(() => setFlipped(true), 800);
-    const t2 = setTimeout(() => setCanContinue(true), 2500);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, []);
+    if (phase === 'revealing') {
+      const t = setTimeout(() => setPhase('card'), 500);
+      return () => clearTimeout(t);
+    }
+    if (phase === 'card') {
+      const t = setTimeout(() => setShowContinue(true), 1200);
+      return () => clearTimeout(t);
+    }
+  }, [phase]);
 
   const handleContinue = () => {
     if (state.mode === 'online') {
@@ -24,91 +34,140 @@ export default function RoleRevealScreen() {
     }
   };
 
+  const handleWheelComplete = () => {
+    setPhase('revealing');
+  };
+
   if (!humanPlayer) return null;
 
-  const roleImages: Record<string, string> = {
-    werewolf: '/card-werewolf.png',
-    villager: '/card-villager.png',
-    seer: '/card-seer.png',
-  };
-
-  const roleColors: Record<string, string> = {
-    werewolf: 'text-werewolf-red',
-    villager: 'text-villager-blue',
-    seer: 'text-accent-purple',
-  };
-
-  const roleIcons: Record<string, React.ReactNode> = {
-    werewolf: <Skull className="w-6 h-6" />,
-    villager: <Shield className="w-6 h-6" />,
-    seer: <Eye className="w-6 h-6" />,
-  };
+  const isEvil = getTrueFaction(humanPlayer.role) === 'werewolf';
 
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col items-center justify-center px-4">
-      <motion.div className="text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-        <h2 className="font-cinzel text-2xl text-text-secondary mb-8">Your Role</h2>
+    <div className="min-h-screen bg-bg-primary flex flex-col items-center justify-center px-4 relative overflow-hidden">
+      <motion.div
+        className="absolute inset-0"
+        animate={{
+          background: isEvil
+            ? ['radial-gradient(circle at 50% 50%, rgba(139,58,58,0.15) 0%, transparent 60%)', 'radial-gradient(circle at 50% 50%, rgba(139,58,58,0.25) 0%, transparent 70%)', 'radial-gradient(circle at 50% 50%, rgba(139,58,58,0.15) 0%, transparent 60%)']
+            : ['radial-gradient(circle at 50% 50%, rgba(96,165,250,0.1) 0%, transparent 60%)', 'radial-gradient(circle at 50% 50%, rgba(96,165,250,0.2) 0%, transparent 70%)', 'radial-gradient(circle at 50% 50%, rgba(96,165,250,0.1) 0%, transparent 60%)']
+        }}
+        transition={{ duration: 4, repeat: Infinity }}
+      />
+      <ParticleBackground count={20} color={isEvil ? 'rgba(139,58,58,0.2)' : 'rgba(96,165,250,0.15)'} />
 
-        {/* 3D Card Flip */}
-        <div className="perspective-[1000px] mb-8">
-          <motion.div
-            className="relative w-64 h-96 mx-auto"
-            style={{ transformStyle: 'preserve-3d' }}
-            animate={{ rotateY: flipped ? 180 : 0 }}
-            transition={{ duration: 1.2, ease: [0.4, 0, 0.2, 1] }}
-          >
-            {/* Card Back */}
-            <div
-              className="absolute inset-0 rounded-xl overflow-hidden shadow-2xl border-2 border-accent-purple/50"
-              style={{ backfaceVisibility: 'hidden' }}
+      <motion.div
+        className="text-center mb-6"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <h2 className="font-cinzel text-3xl text-accent-gold drop-shadow-[0_0_20px_rgba(212,168,67,0.4)]">
+          Your Role
+        </h2>
+        <motion.p
+          className="text-text-muted mt-1"
+          animate={{ opacity: [0.5, 1, 0.5] }}
+          transition={{ duration: 3, repeat: Infinity }}
+        >
+          {phase === 'wheel' ? 'Spin the wheel to reveal your fate...' : phase === 'revealing' ? 'The wheel decides...' : 'Your destiny is sealed'}
+        </motion.p>
+      </motion.div>
+
+      <div className="relative flex items-center justify-center min-h-[420px]">
+        <AnimatePresence mode="wait">
+          {phase === 'wheel' && (
+            <motion.div
+              key="wheel"
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.2, filter: 'blur(10px)' }}
+              transition={{ duration: 0.5 }}
             >
-              <img src="/card-back.png" alt="Card Back" className="w-full h-full object-cover" />
-            </div>
+              <SpinningWheel
+                targetRole={humanPlayer.role}
+                onComplete={handleWheelComplete}
+                spinning={false}
+              />
+            </motion.div>
+          )}
 
-            {/* Card Front */}
-            <div
-              className="absolute inset-0 rounded-xl overflow-hidden shadow-2xl border-2 border-accent-gold/50"
-              style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+          {(phase === 'revealing' || phase === 'card') && (
+            <motion.div
+              key="card"
+              className="flex flex-col items-center"
+              initial={{ opacity: 0, scale: 0.5, rotateY: -90 }}
+              animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+              transition={{ duration: 0.8, type: 'spring', stiffness: 100 }}
             >
-              <img src={roleImages[humanPlayer.role]} alt={getRoleName(humanPlayer.role)} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-              <div className="absolute bottom-0 left-0 right-0 p-4 text-center">
-                <div className={`font-cinzel text-2xl font-bold ${roleColors[humanPlayer.role]} drop-shadow-lg`}>
-                  {getRoleName(humanPlayer.role).toUpperCase()}
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
+              <RoleCard role={humanPlayer.role} size="lg" revealed />
 
-        {/* Role Info */}
-        {flipped && (
-          <motion.div
+              <motion.div
+                className="mt-6 text-center max-w-sm"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+              >
+                <motion.p
+                  className="text-text-secondary text-sm leading-relaxed"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                >
+                  {getRoleDescription(humanPlayer.role)}
+                </motion.p>
+
+                {isEvil && (
+                  <motion.div
+                    className="mt-3 text-werewolf-red text-xs font-bold tracking-widest uppercase"
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    Deceive the village. Eliminate them all.
+                  </motion.div>
+                )}
+                {!isEvil && humanPlayer.role !== 'villager' && (
+                  <motion.div
+                    className="mt-3 text-accent-gold text-xs font-bold tracking-widest uppercase"
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    Use your power wisely. Save the village.
+                  </motion.div>
+                )}
+                {humanPlayer.role === 'villager' && (
+                  <motion.div
+                    className="mt-3 text-blue-400 text-xs font-bold tracking-widest uppercase"
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    Trust no one. Find the wolves.
+                  </motion.div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <AnimatePresence>
+        {showContinue && (
+          <motion.button
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="max-w-sm mx-auto"
-          >
-            <div className={`flex items-center justify-center gap-2 text-xl font-semibold mb-2 ${roleColors[humanPlayer.role]}`}>
-              {roleIcons[humanPlayer.role]}
-              {getRoleName(humanPlayer.role)}
-            </div>
-            <p className="text-text-secondary text-sm">{getRoleDescription(humanPlayer.role)}</p>
-          </motion.div>
-        )}
-
-        {/* Continue Button */}
-        {canContinue && (
-          <motion.button
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            whileHover={{ scale: 1.05, boxShadow: '0 0 30px rgba(212,168,67,0.5)' }}
+            whileTap={{ scale: 0.95 }}
             onClick={handleContinue}
-            className="mt-8 bg-accent-gold hover:bg-accent-gold/90 text-[#1A1833] font-bold py-3 px-10 rounded-lg transition-all hover:shadow-[0_0_20px_rgba(212,168,67,0.4)]"
+            className="mt-8 bg-accent-gold hover:bg-accent-gold/90 text-[#1A1833] font-bold py-4 px-12 rounded-xl transition-all text-lg flex items-center gap-2"
           >
-            Continue to Night {state.round}
+            <motion.span
+              animate={{ x: [0, 5, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              Continue to Night {state.round}
+            </motion.span>
+            <ChevronRight className="w-5 h-5" />
           </motion.button>
         )}
-      </motion.div>
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import type { GameState, GameSettings, GameScreen, Phase, Player, Role, Faction, GameLog, ChatMessage, ExecutionResult } from '../src/types/game';
-import { assignRoles, getFaction, tallyVotes, checkWinCondition, generateAvatar, getAiNames } from '../src/engine/gameEngine';
+import { assignRoles, getFaction, getTrueFaction, tallyVotes, checkWinCondition, generateAvatar, getAiNames } from '../src/engine/gameEngine';
 
 let logIdCounter = 0;
 function makeLog(round: number, message: string, type: GameLog['type']): GameLog {
@@ -20,11 +20,17 @@ interface RoomPlayer {
   role: Role;
   faction: Faction;
   isAlive: boolean;
-  avatar: string;
+  avatar: { icon: string; bg: string; text: string; border: string };
   isHost: boolean;
   nightAction: string | null;
+  bodyguardTarget: string | null;
+  witchHealTarget: string | null;
+  witchPoisonTarget: string | null;
+  sorcererTarget: string | null;
+  alphaWolfTarget: string | null;
   vote: string | null;
   ready: boolean;
+  skipVoted: boolean;
 }
 
 export class GameRoom {
@@ -39,6 +45,14 @@ export class GameRoom {
     playerCount: 8,
     aiDifficulty: 'medium',
     hasSeer: true,
+    hasBodyguard: true,
+    hasHunter: true,
+    hasWitch: true,
+    hasAlphaWolf: true,
+    hasSorcerer: true,
+    hasMinion: true,
+    nightTimerSeconds: 60,
+    discussionTimerSeconds: 120,
   };
   logs: GameLog[] = [];
   chatMessages: ChatMessage[] = [];
@@ -46,8 +60,12 @@ export class GameRoom {
   winner: Faction | null = null;
   executionResult: ExecutionResult | null = null;
   seerCheckResult: { playerId: string; faction: Faction } | null = null;
+  sorcererCheckResult: { playerId: string; isSeer: boolean } | null = null;
   playerSeerResults: Map<string, { playerId: string; faction: Faction }> = new Map();
+  playerSorcererResults: Map<string, { playerId: string; isSeer: boolean }> = new Map();
   nightWerewolfTarget: string | null = null;
+  witchHealUsed: boolean = false;
+  witchPoisonUsed: boolean = false;
   private nightTimer: NodeJS.Timeout | null = null;
   private voteTimer: NodeJS.Timeout | null = null;
 
@@ -70,8 +88,14 @@ export class GameRoom {
       avatar: generateAvatar(this.players.length),
       isHost: false,
       nightAction: null,
+      bodyguardTarget: null,
+      witchHealTarget: null,
+      witchPoisonTarget: null,
+      sorcererTarget: null,
+      alphaWolfTarget: null,
       vote: null,
       ready: false,
+      skipVoted: false,
     });
     return { playerId: id, isHost: socketId === this.hostId };
   }
@@ -80,9 +104,7 @@ export class GameRoom {
     const idx = this.players.findIndex(p => p.socketId === socketId);
     if (idx === -1) return false;
     this.players.splice(idx, 1);
-    // Reassign IDs to keep them sequential
     this.players.forEach((p, i) => { p.id = `p-${i}`; });
-    // If host left, assign new host
     if (socketId === this.hostId && this.players.length > 0) {
       this.hostId = this.players[0].socketId;
       this.players[0].isHost = true;
@@ -98,15 +120,29 @@ export class GameRoom {
     }
     const count = this.players.length;
     const werewolfCount = Math.max(1, Math.floor(count * 0.25));
-    const roles = assignRoles(count, werewolfCount, this.settings.hasSeer);
+    const roles = assignRoles(count, werewolfCount, {
+      hasSeer: this.settings.hasSeer,
+      hasBodyguard: this.settings.hasBodyguard,
+      hasHunter: this.settings.hasHunter,
+      hasWitch: this.settings.hasWitch,
+      hasAlphaWolf: this.settings.hasAlphaWolf,
+      hasSorcerer: this.settings.hasSorcerer,
+      hasMinion: this.settings.hasMinion,
+    });
 
     this.players.forEach((p, i) => {
       p.role = roles[i];
       p.faction = getFaction(p.role);
       p.isAlive = true;
       p.nightAction = null;
+      p.bodyguardTarget = null;
+      p.witchHealTarget = null;
+      p.witchPoisonTarget = null;
+      p.sorcererTarget = null;
+      p.alphaWolfTarget = null;
       p.vote = null;
       p.ready = false;
+      p.skipVoted = false;
     });
 
     this.phase = 'role-reveal';
@@ -118,8 +154,12 @@ export class GameRoom {
     this.winner = null;
     this.executionResult = null;
     this.seerCheckResult = null;
+    this.sorcererCheckResult = null;
     this.playerSeerResults.clear();
+    this.playerSorcererResults.clear();
     this.nightWerewolfTarget = null;
+    this.witchHealUsed = false;
+    this.witchPoisonUsed = false;
   }
 
   setPlayerReady(playerId: string) {
@@ -141,33 +181,38 @@ export class GameRoom {
 
     player.nightAction = targetId;
 
-    // Werewolves: collect and pick majority target
-    if (player.role === 'werewolf') {
-      const wolves = this.players.filter(p => p.isAlive && p.role === 'werewolf');
-      const submitted = wolves.filter(p => p.nightAction !== null);
+    if (player.role === 'werewolf' || player.role === 'alphaWolf') {
+      const wolves = this.players.filter(p => p.isAlive && (p.role === 'werewolf' || p.role === 'alphaWolf'));
+      const submitted = wolves.filter(p => p.nightAction !== null || p.alphaWolfTarget !== null);
       if (submitted.length === wolves.length) {
-        // All wolves submitted - pick majority
-        const counts: Record<string, number> = {};
-        submitted.forEach(w => {
-          counts[w.nightAction!] = (counts[w.nightAction!] || 0) + 1;
-        });
-        let max = 0;
-        let targets: string[] = [];
-        Object.entries(counts).forEach(([tid, c]) => {
-          if (c > max) { max = c; targets = [tid]; }
-          else if (c === max) targets.push(tid);
-        });
-        this.nightWerewolfTarget = targets[Math.floor(Math.random() * targets.length)];
-        return true; // all in
+        // Check alpha wolf override first
+        const alpha = wolves.find(w => w.role === 'alphaWolf');
+        if (alpha && alpha.alphaWolfTarget) {
+          this.nightWerewolfTarget = alpha.alphaWolfTarget;
+        } else if (alpha && alpha.nightAction) {
+          this.nightWerewolfTarget = alpha.nightAction;
+        } else {
+          const counts: Record<string, number> = {};
+          submitted.forEach(w => {
+            const target = w.alphaWolfTarget || w.nightAction;
+            if (target) counts[target] = (counts[target] || 0) + 1;
+          });
+          let max = 0;
+          let targets: string[] = [];
+          Object.entries(counts).forEach(([tid, c]) => {
+            if (c > max) { max = c; targets = [tid]; }
+            else if (c === max) targets.push(tid);
+          });
+          this.nightWerewolfTarget = targets[Math.floor(Math.random() * targets.length)];
+        }
+        return true;
       }
     }
 
-    // Seer: just store
     if (player.role === 'seer') {
-      return true; // seer action is immediate
+      return true;
     }
 
-    // Villager: auto
     if (player.role === 'villager') {
       return true;
     }
@@ -175,73 +220,189 @@ export class GameRoom {
     return false;
   }
 
+  submitBodyguardAction(playerId: string, targetId: string) {
+    const player = this.players.find(p => p.id === playerId);
+    if (player && player.isAlive && player.role === 'bodyguard') {
+      player.bodyguardTarget = targetId;
+    }
+  }
+
+  submitWitchAction(playerId: string, healTarget: string | null, poisonTarget: string | null) {
+    const player = this.players.find(p => p.id === playerId);
+    if (player && player.isAlive && player.role === 'witch') {
+      player.ready = true;
+      if (healTarget && !this.witchHealUsed) {
+        player.witchHealTarget = healTarget;
+      }
+      if (poisonTarget && !this.witchPoisonUsed) {
+        player.witchPoisonTarget = poisonTarget;
+      }
+    }
+  }
+
+  submitSorcererAction(playerId: string, targetId: string) {
+    const player = this.players.find(p => p.id === playerId);
+    if (player && player.isAlive && player.role === 'sorcerer') {
+      player.sorcererTarget = targetId;
+      const target = this.players.find(p => p.id === targetId);
+      if (target) {
+        this.playerSorcererResults.set(playerId, { playerId: target.id, isSeer: target.role === 'seer' });
+      }
+    }
+  }
+
+  submitAlphaWolfAction(playerId: string, targetId: string) {
+    const player = this.players.find(p => p.id === playerId);
+    if (player && player.isAlive && player.role === 'alphaWolf') {
+      player.alphaWolfTarget = targetId;
+    }
+  }
+
   allNightActionsIn(): boolean {
     const alive = this.players.filter(p => p.isAlive);
-    const wolves = alive.filter(p => p.role === 'werewolf');
+    const wolves = alive.filter(p => p.role === 'werewolf' || p.role === 'alphaWolf');
     const seers = alive.filter(p => p.role === 'seer');
+    const bodyguards = alive.filter(p => p.role === 'bodyguard');
+    const witches = alive.filter(p => p.role === 'witch');
+    const sorcerers = alive.filter(p => p.role === 'sorcerer');
     const villagers = alive.filter(p => p.role === 'villager');
+    const minions = alive.filter(p => p.role === 'minion');
+    const hunters = alive.filter(p => p.role === 'hunter');
 
-    // Wolves need at least one submission (or we auto-pick after timeout)
-    const wolvesReady = wolves.length === 0 || wolves.some(w => w.nightAction !== null);
-    // Seers need submission
+    const wolvesReady = wolves.length === 0 || wolves.every(w => w.nightAction !== null || w.alphaWolfTarget !== null);
     const seersReady = seers.every(s => s.nightAction !== null);
-    // Villagers auto-ready
+    const bodyguardsReady = bodyguards.every(b => b.bodyguardTarget !== null);
+    const witchesReady = witches.every(w => w.ready || (this.witchHealUsed && this.witchPoisonUsed));
+    const sorcerersReady = sorcerers.every(s => s.sorcererTarget !== null);
     const villagersReady = true;
+    const minionsReady = true;
+    const huntersReady = true;
 
-    return wolvesReady && seersReady && villagersReady;
+    return wolvesReady && seersReady && bodyguardsReady && witchesReady && sorcerersReady && villagersReady && minionsReady && huntersReady;
   }
 
   processNight() {
     const newLogs = [...this.logs];
     let killed: RoomPlayer | null = null;
+    let witchKilled: RoomPlayer | null = null;
 
     // Werewolf kill
-    const wolves = this.players.filter(p => p.isAlive && p.role === 'werewolf');
+    const wolves = this.players.filter(p => p.isAlive && (p.role === 'werewolf' || p.role === 'alphaWolf'));
     if (wolves.length > 0) {
       if (!this.nightWerewolfTarget) {
-        // Pick random target from wolves who submitted, or random villager
-        const submittedWolves = wolves.filter(w => w.nightAction !== null);
-        if (submittedWolves.length > 0) {
-          const w = submittedWolves[Math.floor(Math.random() * submittedWolves.length)];
-          this.nightWerewolfTarget = w.nightAction!;
+        const alpha = wolves.find(w => w.role === 'alphaWolf');
+        if (alpha && (alpha.alphaWolfTarget || alpha.nightAction)) {
+          this.nightWerewolfTarget = alpha.alphaWolfTarget || alpha.nightAction;
         } else {
-          // No wolves submitted - pick random alive non-wolf
-          const targets = this.players.filter(p => p.isAlive && p.faction !== 'werewolf');
-          if (targets.length > 0) this.nightWerewolfTarget = targets[Math.floor(Math.random() * targets.length)].id;
+          const submittedWolves = wolves.filter(w => w.nightAction !== null || w.alphaWolfTarget !== null);
+          if (submittedWolves.length > 0) {
+            const w = submittedWolves[Math.floor(Math.random() * submittedWolves.length)];
+            this.nightWerewolfTarget = w.alphaWolfTarget || w.nightAction!;
+          } else {
+            const targets = this.players.filter(p => p.isAlive && getTrueFaction(p.role) !== 'werewolf');
+            if (targets.length > 0) this.nightWerewolfTarget = targets[Math.floor(Math.random() * targets.length)].id;
+          }
         }
       }
+
+      let werewolfKillBlocked = false;
       if (this.nightWerewolfTarget) {
-        const target = this.players.find(p => p.id === this.nightWerewolfTarget);
-        if (target && target.isAlive) {
-          target.isAlive = false;
-          killed = target;
-          newLogs.push(makeLog(this.round, `${target.name} was found dead this morning.`, 'death'));
+        const bgTarget = this.players.find(p => p.isAlive && p.role === 'bodyguard')?.bodyguardTarget;
+        const witchHeal = this.players.find(p => p.isAlive && p.role === 'witch')?.witchHealTarget;
+
+        if (bgTarget === this.nightWerewolfTarget) {
+          werewolfKillBlocked = true;
+          newLogs.push(makeLog(this.round, 'The Bodyguard protected someone from the Werewolves!', 'action'));
+        }
+        if (witchHeal === this.nightWerewolfTarget && !this.witchHealUsed) {
+          werewolfKillBlocked = true;
+          newLogs.push(makeLog(this.round, 'The Witch used her healing potion to save someone!', 'action'));
+        }
+
+        if (!werewolfKillBlocked) {
+          const target = this.players.find(p => p.id === this.nightWerewolfTarget);
+          if (target && target.isAlive) {
+            target.isAlive = false;
+            killed = target;
+            newLogs.push(makeLog(this.round, `${target.name} was found dead this morning.`, 'death'));
+          }
+        }
+      }
+
+      if (!killed && !werewolfKillBlocked) {
+        newLogs.push(makeLog(this.round, 'The night was peaceful. No one died.', 'system'));
+      } else if (!killed && werewolfKillBlocked) {
+        newLogs.push(makeLog(this.round, 'The night was peaceful thanks to a protector.', 'system'));
+      }
+    }
+
+    // Witch poison
+    const witch = this.players.find(p => p.isAlive && p.role === 'witch');
+    if (witch && witch.witchPoisonTarget && !this.witchPoisonUsed) {
+      const poisonTarget = this.players.find(p => p.id === witch.witchPoisonTarget);
+      if (poisonTarget && poisonTarget.isAlive) {
+        poisonTarget.isAlive = false;
+        witchKilled = poisonTarget;
+        newLogs.push(makeLog(this.round, `${poisonTarget.name} was found poisoned this morning.`, 'death'));
+      }
+    }
+
+    // Hunter night revenge
+    if (killed && killed.role === 'hunter') {
+      const hunterRevengeTargets = this.players.filter(p => p.isAlive && p.id !== killed.id);
+      if (hunterRevengeTargets.length > 0) {
+        const revengeTarget = hunterRevengeTargets[Math.floor(Math.random() * hunterRevengeTargets.length)];
+        const revengeIdx = this.players.findIndex(p => p.id === revengeTarget.id);
+        if (revengeIdx !== -1) {
+          this.players[revengeIdx].isAlive = false;
+          newLogs.push(makeLog(this.round, `${killed.name} fired their rifle in their dying breath! ${revengeTarget.name} was killed!`, 'death'));
         }
       }
     }
 
-    if (!killed) {
-      newLogs.push(makeLog(this.round, 'The night was peaceful. No one died.', 'system'));
-    }
-
-    // Process seer checks (server-side knowledge only)
+    // Process seer checks
     this.playerSeerResults.clear();
     const seers = this.players.filter(p => p.isAlive && p.role === 'seer');
     for (const seer of seers) {
       if (seer.nightAction) {
         const target = this.players.find(p => p.id === seer.nightAction);
         if (target) {
-          this.playerSeerResults.set(seer.id, { playerId: target.id, faction: target.faction });
+          // Minion appears as village to Seer
+          const shownFaction = target.role === 'minion' ? 'village' : target.faction;
+          this.playerSeerResults.set(seer.id, { playerId: target.id, faction: shownFaction });
         }
       }
     }
+
+    // Process sorcerer checks
+    this.playerSorcererResults.clear();
+    const sorcerers = this.players.filter(p => p.isAlive && p.role === 'sorcerer');
+    for (const sorcerer of sorcerers) {
+      if (sorcerer.sorcererTarget) {
+        const target = this.players.find(p => p.id === sorcerer.sorcererTarget);
+        if (target) {
+          this.playerSorcererResults.set(sorcerer.id, { playerId: target.id, isSeer: target.role === 'seer' });
+        }
+      }
+    }
+
+    // Track witch potions
+    if (witch?.witchHealTarget) this.witchHealUsed = true;
+    if (witch?.witchPoisonTarget) this.witchPoisonUsed = true;
 
     this.lastKilled = killed ? this.toPublicPlayer(killed) : null;
     this.logs = newLogs;
     this.winner = checkWinCondition(this.players.map(p => this.toPublicPlayer(p)));
 
     // Reset night actions
-    this.players.forEach(p => p.nightAction = null);
+    this.players.forEach(p => {
+      p.nightAction = null;
+      p.bodyguardTarget = null;
+      p.witchHealTarget = null;
+      p.witchPoisonTarget = null;
+      p.sorcererTarget = null;
+      p.alphaWolfTarget = null;
+    });
     this.nightWerewolfTarget = null;
     this.resetReady();
 
@@ -280,6 +441,19 @@ export class GameRoom {
       if (idx !== -1) {
         newPlayers[idx] = { ...newPlayers[idx], isAlive: false };
         newLogs.push(makeLog(this.round, `${eliminated.name} was eliminated. They were a ${eliminated.role.toUpperCase()}!`, 'death'));
+
+        // Hunter revenge
+        if (eliminated.role === 'hunter') {
+          const aliveOthers = newPlayers.filter(p => p.isAlive && p.id !== eliminated.id);
+          if (aliveOthers.length > 0) {
+            const revengeTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+            const revengeIdx = newPlayers.findIndex(p => p.id === revengeTarget.id);
+            if (revengeIdx !== -1) {
+              newPlayers[revengeIdx] = { ...newPlayers[revengeIdx], isAlive: false };
+              newLogs.push(makeLog(this.round, `${eliminated.name} fired their rifle in revenge! ${revengeTarget.name} was killed!`, 'death'));
+            }
+          }
+        }
       }
     } else {
       newLogs.push(makeLog(this.round, 'The vote was tied. No one was eliminated.', 'system'));
@@ -299,8 +473,8 @@ export class GameRoom {
       noVotes,
     };
 
-    // Reset votes
-    this.players.forEach(p => p.vote = null);
+    // Reset votes and skip votes
+    this.players.forEach(p => { p.vote = null; p.skipVoted = false; });
     this.resetReady();
 
     if (winner) {
@@ -311,6 +485,20 @@ export class GameRoom {
       this.phase = 'execution';
       this.screen = 'execution';
     }
+  }
+
+  submitSkipVote(playerId: string) {
+    const player = this.players.find(p => p.id === playerId);
+    if (player && player.isAlive) {
+      player.skipVoted = true;
+    }
+  }
+
+  shouldSkipToVote(): boolean {
+    const alive = this.players.filter(p => p.isAlive);
+    const skipCount = alive.filter(p => p.skipVoted).length;
+    const majority = Math.floor(alive.length / 2) + 1;
+    return skipCount >= majority;
   }
 
   addChat(playerId: string, playerName: string, message: string) {
@@ -327,9 +515,12 @@ export class GameRoom {
     this.round += 1;
     this.executionResult = null;
     this.seerCheckResult = null;
+    this.sorcererCheckResult = null;
     this.playerSeerResults.clear();
+    this.playerSorcererResults.clear();
     this.lastKilled = null;
     this.resetReady();
+    this.players.forEach(p => { p.skipVoted = false; });
     this.phase = 'night';
     this.screen = 'night';
     this.logs.push(makeLog(this.round, `Night ${this.round} falls... The village sleeps.`, 'system'));
@@ -338,6 +529,7 @@ export class GameRoom {
   startDay() {
     this.phase = 'day';
     this.screen = 'day';
+    this.players.forEach(p => { p.skipVoted = false; });
     this.logs.push(makeLog(this.round, `Day ${this.round} begins. Discuss and find the werewolves!`, 'system'));
   }
 
@@ -356,12 +548,14 @@ export class GameRoom {
   getStateForPlayer(playerId: string): GameState {
     const me = this.players.find(p => p.id === playerId);
     const myRole = me?.role || 'villager';
-    const isWerewolf = myRole === 'werewolf';
+    const myTrueFaction = getTrueFaction(myRole);
+    const isWerewolf = myTrueFaction === 'werewolf';
 
     const players: Player[] = this.players.map(p => {
       const isSelf = p.id === playerId;
       const isDead = !p.isAlive;
-      const isWerewolfTeammate = isWerewolf && p.role === 'werewolf';
+      // Werewolf team sees each other (including minion)
+      const isWerewolfTeammate = isWerewolf && getTrueFaction(p.role) === 'werewolf';
       const revealRole = isSelf || isDead || isWerewolfTeammate;
 
       return {
@@ -375,11 +569,14 @@ export class GameRoom {
       };
     });
 
-    // Seer result: only show if this player is the seer and they checked someone this night
     let seerResult = me?.role === 'seer' ? (this.playerSeerResults.get(playerId) || null) : null;
+    let sorcererResult = me?.role === 'sorcerer' ? (this.playerSorcererResults.get(playerId) || null) : null;
 
-    const aliveWerewolves = this.players.filter(p => p.isAlive && p.faction === 'werewolf').length;
-    const aliveVillagers = this.players.filter(p => p.isAlive && p.faction === 'village').length;
+    const aliveWerewolves = this.players.filter(p => p.isAlive && getTrueFaction(p.role) === 'werewolf').length;
+    const aliveVillagers = this.players.filter(p => p.isAlive && getTrueFaction(p.role) === 'village').length;
+
+    const skipVotes: Record<string, boolean> = {};
+    this.players.forEach(p => { if (p.skipVoted) skipVotes[p.id] = true; });
 
     return {
       screen: this.screen,
@@ -389,7 +586,8 @@ export class GameRoom {
       humanPlayerId: playerId,
       nightActionTarget: me?.nightAction || null,
       seerCheckResult: seerResult,
-      votes: {}, // votes are secret until processed
+      sorcererCheckResult: sorcererResult,
+      votes: {},
       lastKilled: this.lastKilled,
       winner: this.winner,
       logs: this.logs,
@@ -397,7 +595,15 @@ export class GameRoom {
       isProcessingAI: false,
       executionResult: this.executionResult,
       chatMessages: this.chatMessages,
-      // multiplayer extras
+      dawnReady: {},
+      skipVotes,
+      bodyguardTarget: me?.bodyguardTarget || null,
+      witchHealUsed: this.witchHealUsed,
+      witchHealTarget: me?.witchHealTarget || null,
+      witchPoisonUsed: this.witchPoisonUsed,
+      witchPoisonTarget: me?.witchPoisonTarget || null,
+      hunterTarget: null,
+      alphaWolfTarget: me?.alphaWolfTarget || null,
       mode: 'online' as const,
       roomCode: this.code,
       isHost: me?.isHost || false,
@@ -425,6 +631,7 @@ export class GameRoom {
       humanPlayerId: '',
       nightActionTarget: null,
       seerCheckResult: null,
+      sorcererCheckResult: null,
       votes: {},
       lastKilled: null,
       winner: null,
@@ -433,6 +640,15 @@ export class GameRoom {
       isProcessingAI: false,
       executionResult: null,
       chatMessages: [],
+      dawnReady: {},
+      skipVotes: {},
+      bodyguardTarget: null,
+      witchHealUsed: false,
+      witchHealTarget: null,
+      witchPoisonUsed: false,
+      witchPoisonTarget: null,
+      hunterTarget: null,
+      alphaWolfTarget: null,
       mode: 'online' as const,
       roomCode: this.code,
       isHost: false,
