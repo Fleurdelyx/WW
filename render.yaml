@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: werewolf-game
+    runtime: node
+    buildCommand: cd app && npm install && npm run build
+    startCommand: cd app && npx tsx server/index.ts
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
