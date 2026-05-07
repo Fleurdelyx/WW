@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 260 30% 8%;
+    --foreground: 270 25% 94%;
+    --card: 260 28% 14%;
+    --card-foreground: 270 25% 94%;
+    --popover: 260 28% 14%;
+    --popover-foreground: 270 25% 94%;
+    --primary: 270 15% 48%;
+    --primary-foreground: 270 25% 94%;
+    --secondary: 260 28% 18%;
+    --secondary-foreground: 270 25% 94%;
+    --muted: 260 20% 22%;
+    --muted-foreground: 260 10% 55%;
+    --accent: 270 15% 48%;
+    --accent-foreground: 270 25% 94%;
+    --destructive: 0 50% 45%;
+    --destructive-foreground: 270 25% 94%;
+    --border: 270 15% 25%;
+    --input: 270 15% 25%;
+    --ring: 43 55% 55%;
+    --radius: 0.5rem;
+  }
+
+  body {
+    background-color: #0F0E1A;
+    color: #F0EBF5;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+}
+
+@layer components {
+  .font-cinzel {
+    font-family: 'Cinzel', serif;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #1A1833;
+}
+::-webkit-scrollbar-thumb {
+  background: #7B6D8D;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9B8EA8;
+}
+
+/* Perspective for 3D card flip */
+.perspective-\[1000px\] {
+  perspective: 1000px;
+}
