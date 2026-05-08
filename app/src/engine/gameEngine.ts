@@ -284,7 +284,7 @@ function pickRandom<T>(arr: T[]): T {
 
 export function generateAiChat(player: Player, players: Player[], round: number): ChatMessage | null {
   if (!player.isAlive || player.isHuman) return null;
-  if (Math.random() > 0.4) return null;
+  if (Math.random() > 0.65) return null;
 
   const aliveOthers = players.filter(p => p.id !== player.id && p.isAlive);
   if (aliveOthers.length === 0) return null;

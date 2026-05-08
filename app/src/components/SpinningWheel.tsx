@@ -23,12 +23,12 @@ const SEGMENTS: WheelSegment[] = [
   { role: 'minion', label: 'Minion', color: '#f472b6', darkColor: '#831843', icon: VenetianMask },
 ];
 
-const WHEEL_SIZE = 400;
+const WHEEL_SIZE = 380;
 const CENTER = WHEEL_SIZE / 2;
-const RADIUS = 180;
-const INNER_RADIUS = 70;
-const ICON_RADIUS = 130;
-const LABEL_RADIUS = 95;
+const RADIUS = 170;
+const INNER_RADIUS = 55;
+const ICON_RADIUS = 122;
+const LABEL_RADIUS = 88;
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const angleRad = (angleDeg - 90) * Math.PI / 180;
@@ -58,10 +58,8 @@ interface SpinningWheelProps {
 
 export default function SpinningWheel({ targetRole, onComplete, spinning = false }: SpinningWheelProps) {
   const controls = useAnimation();
-  const [rotation, setRotation] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
   const [showGlow, setShowGlow] = useState(false);
-  const targetSettled = useRef(false);
 
   const numSegments = SEGMENTS.length;
   const arc = 360 / numSegments;
@@ -74,29 +72,23 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
     if (isSpinning) return;
     setIsSpinning(true);
     setShowGlow(false);
-    targetSettled.current = false;
 
     const targetIndex = getSegmentIndex(targetRole);
     const segmentCenter = (targetIndex + 0.5) * arc;
     const fullSpins = 5 + Math.floor(Math.random() * 3); // 5-7 full spins
     const targetRotation = fullSpins * 360 - segmentCenter;
 
-    // Start fast spin
-    await controls.start({
-      rotate: targetRotation - 180,
-      transition: { duration: 2.5, ease: 'circOut' },
-    });
-
-    // Slow down to target
+    // Single smooth spin: fast start, ease out to target
     await controls.start({
       rotate: targetRotation,
-      transition: { duration: 1.5, ease: [0.25, 1, 0.5, 1] },
+      transition: {
+        duration: 4.5,
+        ease: [0.23, 0.8, 0.25, 1], // custom cubic-bezier: fast start, long smooth deceleration
+      },
     });
 
-    setRotation(targetRotation);
     setIsSpinning(false);
     setShowGlow(true);
-    targetSettled.current = true;
 
     setTimeout(() => {
       onComplete?.();
@@ -144,8 +136,8 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
           initial={{ rotate: 0 }}
           style={{ transformOrigin: 'center' }}
         >
-          {/* Center circle background */}
-          <circle cx={CENTER} cy={CENTER} r={RADIUS + 4} fill="rgba(15,14,26,0.9)" stroke="rgba(212,168,67,0.3)" strokeWidth="2" />
+          {/* Outer rim */}
+          <circle cx={CENTER} cy={CENTER} r={RADIUS + 2} fill="none" stroke="rgba(212,168,67,0.3)" strokeWidth="2" />
 
           {SEGMENTS.map((seg, i) => {
             const startAngle = i * arc;
@@ -160,8 +152,8 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
               <g key={seg.role}>
                 <path
                   d={path}
-                  fill={isTarget ? seg.color + '40' : seg.darkColor + '90'}
-                  stroke={isTarget ? seg.color : seg.color + '60'}
+                  fill={isTarget ? seg.color + '50' : seg.darkColor + '95'}
+                  stroke={isTarget ? seg.color : seg.color + '50'}
                   strokeWidth={isTarget ? 3 : 1}
                   className="transition-all"
                 />
@@ -171,7 +163,7 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
                   y1={CENTER}
                   x2={polarToCartesian(CENTER, CENTER, RADIUS, startAngle).x}
                   y2={polarToCartesian(CENTER, CENTER, RADIUS, startAngle).y}
-                  stroke="rgba(255,255,255,0.1)"
+                  stroke="rgba(255,255,255,0.12)"
                   strokeWidth="1"
                 />
                 {/* Icon */}
@@ -181,7 +173,7 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
                   width={24}
                   height={24}
                 >
-                  <div className={`flex items-center justify-center w-full h-full ${isTarget ? 'text-white' : 'text-white/60'}`}>
+                  <div className={`flex items-center justify-center w-full h-full ${isTarget ? 'text-white drop-shadow-[0_0_6px_rgba(255,255,255,0.8)]' : 'text-white/50'}`}>
                     <seg.icon className="w-5 h-5" />
                   </div>
                 </foreignObject>
@@ -191,7 +183,7 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
                   y={labelPos.y}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fill={isTarget ? '#fff' : 'rgba(255,255,255,0.5)'}
+                  fill={isTarget ? '#fff' : 'rgba(255,255,255,0.45)'}
                   fontSize="10"
                   fontWeight={isTarget ? '700' : '500'}
                   style={{ textShadow: isTarget ? `0 0 10px ${seg.color}` : 'none' }}
@@ -202,17 +194,22 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
             );
           })}
 
-          {/* Inner circle */}
-          <circle cx={CENTER} cy={CENTER} r={INNER_RADIUS} fill="#0f0e1a" stroke="rgba(212,168,67,0.4)" strokeWidth="2" />
+          {/* Inner circle - solid dark background */}
+          <circle cx={CENTER} cy={CENTER} r={INNER_RADIUS} fill="#0f0e1a" stroke="rgba(212,168,67,0.5)" strokeWidth="2" />
+
+          {/* Center hub decoration - static, part of SVG */}
+          <circle cx={CENTER} cy={CENTER} r={INNER_RADIUS - 8} fill="none" stroke="rgba(212,168,67,0.2)" strokeWidth="1" strokeDasharray="4 4" />
+          <circle cx={CENTER} cy={CENTER} r={8} fill="#d4a843" opacity="0.9" />
+          <circle cx={CENTER} cy={CENTER} r={4} fill="#0f0e1a" />
 
           {/* Center hub text */}
           <text
             x={CENTER}
-            y={CENTER - 5}
+            y={CENTER - 22}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#d4a843"
-            fontSize="14"
+            fontSize="13"
             fontWeight="bold"
             fontFamily="Cinzel"
           >
@@ -220,29 +217,16 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
           </text>
           <text
             x={CENTER}
-            y={CENTER + 14}
+            y={CENTER + 22}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#d4a843"
-            fontSize="10"
-            opacity="0.7"
+            fontSize="9"
+            opacity="0.6"
           >
-            SPIN
+            FATE
           </text>
         </motion.svg>
-
-        {/* Center hub decoration */}
-        <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120px] h-[120px] rounded-full border-2 border-accent-gold/30 flex items-center justify-center"
-          animate={{ rotate: isSpinning ? 360 : 0 }}
-          transition={{ duration: isSpinning ? 0.5 : 0 }}
-        >
-          <motion.div
-            className="w-3 h-3 rounded-full bg-accent-gold"
-            animate={showGlow ? { scale: [1, 1.5, 1], boxShadow: ['0 0 10px rgba(212,168,67,0.5)', '0 0 30px rgba(212,168,67,0.8)', '0 0 10px rgba(212,168,67,0.5)'] } : {}}
-            transition={{ duration: 1, repeat: Infinity }}
-          />
-        </motion.div>
       </div>
 
       {/* Spin button (only shown before spin) */}
@@ -275,7 +259,7 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
             animate={{ scale: [1, 1.3, 1] }}
             transition={{ duration: 0.5, repeat: Infinity }}
           />
-          Spinning...
+          The wheel decides...
         </motion.div>
       )}
     </div>

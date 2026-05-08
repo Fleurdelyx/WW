@@ -171,14 +171,99 @@ export default function NightScreen() {
 
   return (
     <div className="min-h-screen bg-bg-primary relative overflow-hidden">
+      {/* Base night gradient */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#060614] via-[#0d0d1f] to-[#0a0a1a]" />
+
+      {/* Animated stars */}
+      <div className="absolute inset-0 overflow-hidden">
+        {Array.from({ length: 60 }).map((_, i) => {
+          const x = Math.random() * 100;
+          const y = Math.random() * 60;
+          const size = 1 + Math.random() * 2;
+          const delay = Math.random() * 5;
+          const duration = 2 + Math.random() * 4;
+          return (
+            <motion.div
+              key={`star-${i}`}
+              className="absolute rounded-full bg-white"
+              style={{ left: `${x}%`, top: `${y}%`, width: size, height: size }}
+              animate={{ opacity: [0.2, 0.8, 0.2], scale: [1, 1.3, 1] }}
+              transition={{ duration, delay, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Glowing moon */}
       <motion.div
-        className="absolute inset-0"
-        animate={{ background: ['linear-gradient(to bottom, #0a0a1a, #12102a)', 'linear-gradient(to bottom, #0d0d1f, #151230)', 'linear-gradient(to bottom, #0a0a1a, #12102a)'] }}
-        transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute top-8 right-12 w-24 h-24 rounded-full"
+        style={{
+          background: 'radial-gradient(circle, rgba(212,168,67,0.25) 0%, rgba(212,168,67,0.05) 50%, transparent 70%)',
+          boxShadow: '0 0 60px rgba(212,168,67,0.15), 0 0 120px rgba(212,168,67,0.05)',
+        }}
+        animate={{ y: [0, -4, 0], scale: [1, 1.02, 1] }}
+        transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(75,60,110,0.3)_0%,_transparent_70%)]" />
+      <div
+        className="absolute top-10 right-14 w-16 h-16 rounded-full opacity-60"
+        style={{
+          background: 'radial-gradient(circle at 35% 35%, #f5e6c8 0%, #d4a843 40%, transparent 70%)',
+        }}
+      />
+
+      {/* Nebula clouds */}
+      <motion.div
+        className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full opacity-20"
+        style={{ background: 'radial-gradient(circle, rgba(96,60,120,0.4) 0%, transparent 70%)', filter: 'blur(40px)' }}
+        animate={{ x: [0, 30, 0], y: [0, -20, 0], scale: [1, 1.1, 1] }}
+        transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute top-1/3 right-1/4 w-80 h-80 rounded-full opacity-15"
+        style={{ background: 'radial-gradient(circle, rgba(60,80,120,0.3) 0%, transparent 70%)', filter: 'blur(50px)' }}
+        animate={{ x: [0, -20, 0], y: [0, 30, 0], scale: [1, 1.15, 1] }}
+        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+      />
+
+      {/* Village silhouette at bottom */}
+      <div className="absolute bottom-0 left-0 right-0 h-48 pointer-events-none">
+        <svg viewBox="0 0 1200 200" preserveAspectRatio="none" className="w-full h-full opacity-30">
+          <path
+            d="M0,200 L0,140 L20,140 L20,120 L40,120 L40,100 L60,100 L60,130 L80,130 L80,90 L110,90 L110,140 L130,140 L130,80 L160,80 L160,110 L180,110 L180,130 L200,130 L200,70 L230,70 L230,100 L250,100 L250,140 L280,140 L280,60 L320,60 L320,120 L350,120 L350,90 L380,90 L380,130 L400,130 L400,100 L430,100 L430,140 L460,140 L460,80 L490,80 L490,110 L520,110 L520,130 L550,130 L550,70 L590,70 L590,120 L620,120 L620,90 L650,90 L650,140 L680,140 L680,100 L710,100 L710,130 L740,130 L740,80 L770,80 L770,110 L800,110 L800,130 L830,130 L830,60 L870,60 L870,120 L900,120 L900,90 L930,90 L930,140 L960,140 L960,100 L990,100 L990,130 L1020,130 L1020,80 L1050,80 L1050,110 L1080,110 L1080,130 L1110,130 L1110,70 L1140,70 L1140,120 L1170,120 L1170,140 L1200,140 L1200,200 Z"
+            fill="#0a0a14"
+          />
+        </svg>
+        {/* Window lights in village */}
+        {Array.from({ length: 12 }).map((_, i) => {
+          const left = 5 + Math.random() * 90;
+          const bottom = 15 + Math.random() * 25;
+          const delay = Math.random() * 4;
+          return (
+            <motion.div
+              key={`window-${i}`}
+              className="absolute w-1 h-1 rounded-full bg-yellow-600/60"
+              style={{ left: `${left}%`, bottom: `${bottom}%` }}
+              animate={{ opacity: [0.3, 0.8, 0.3] }}
+              transition={{ duration: 3, delay, repeat: Infinity, ease: 'easeInOut' }}
+            />
+          );
+        })}
+      </div>
+
+      {/* Ground fog layers */}
+      <motion.div
+        className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
+        style={{ background: 'linear-gradient(to top, rgba(15,14,26,0.9) 0%, transparent 100%)' }}
+        animate={{ opacity: [0.6, 0.9, 0.6] }}
+        transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+      />
+      <motion.div
+        className="absolute bottom-0 left-0 right-0 h-20 pointer-events-none"
+        style={{ background: 'linear-gradient(to top, rgba(15,14,26,1) 0%, transparent 100%)' }}
+      />
+
       <FogLayer />
-      <ParticleBackground count={40} color="rgba(123,109,141,0.2)" />
+      <ParticleBackground count={30} color="rgba(123,109,141,0.15)" />
       <LightningFlash trigger={lightning} />
 
       <div className="relative z-10 flex flex-col items-center px-4 py-6 min-h-screen">

@@ -1,13 +1,17 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
-import { Moon, Users, HelpCircle, ChevronRight, Globe, Sparkles, Shield, Eye, Crosshair, FlaskConical } from 'lucide-react';
-import { useState } from 'react';
+import { Moon, Users, HelpCircle, ChevronRight, Globe, Sparkles, Shield, Eye, Crosshair, FlaskConical, User } from 'lucide-react';
+import { useState, useRef } from 'react';
 import ParticleBackground from '@/components/ParticleBackground';
 
 export default function HomeScreen() {
   const setScreen = useGameStore(s => s.setScreen);
   const setMode = useGameStore(s => s.setMode);
+  const updateSettings = useGameStore(s => s.updateSettings);
+  const settings = useGameStore(s => s.state.settings);
   const [showHelp, setShowHelp] = useState(false);
+  const [nickname, setNickname] = useState(settings.playerName || 'You');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const handleLocal = () => {
     setMode('local');
@@ -87,6 +91,34 @@ export default function HomeScreen() {
           >
             A Social Deduction Game
           </motion.p>
+        </motion.div>
+
+        {/* Nickname Input */}
+        <motion.div
+          className="w-72"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+        >
+          <div className="relative">
+            <motion.input
+              ref={inputRef}
+              type="text"
+              value={nickname}
+              onChange={e => {
+                setNickname(e.target.value);
+                updateSettings({ playerName: e.target.value || 'You' });
+              }}
+              onFocus={() => inputRef.current?.select()}
+              placeholder="Enter your nickname"
+              maxLength={16}
+              className="w-full bg-bg-secondary/80 border border-accent-purple/30 rounded-xl px-4 py-3 text-text-primary text-center font-medium focus:border-accent-gold focus:outline-none focus:ring-1 focus:ring-accent-gold/30 transition-all"
+              whileFocus={{ scale: 1.02, borderColor: 'rgba(212,168,67,0.5)' }}
+            />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">
+              <User className="w-4 h-4" />
+            </div>
+          </div>
         </motion.div>
 
         {/* Role icons strip */}

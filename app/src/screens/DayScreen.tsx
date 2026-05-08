@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import { useState, useRef, useEffect } from 'react';
-import { Sun, Users, MessageSquare, Vote, Skull, Send, Clock, FastForward, Zap, Flame } from 'lucide-react';
+import { Sun, Users, MessageSquare, Vote, Skull, Send, Clock, FastForward, Zap, Flame, User } from 'lucide-react';
 import type { Player } from '@/types/game';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import CountdownRing from '@/components/CountdownRing';
@@ -32,7 +32,7 @@ function ChatBubble({ msg, humanId }: { msg: { senderId: string; senderName: str
 }
 
 export default function DayScreen() {
-  const { state, castVote, sendChat, startVoting, voteSkipDiscussion } = useGameStore();
+  const { state, castVote, sendChat, startVoting, voteSkipDiscussion, aiAutoChat } = useGameStore();
   const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost, settings, skipVotes } = state;
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [localPhase, setLocalPhase] = useState<'discussion' | 'voting'>('discussion');
@@ -45,6 +45,8 @@ export default function DayScreen() {
 
   const isOnline = mode === 'online';
   const phase = isOnline ? (gamePhase === 'voting' ? 'voting' : 'discussion') : localPhase;
+  const phaseRef = useRef(phase);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   const alivePlayers = players.filter(p => p.isAlive);
   const aliveCount = alivePlayers.length;
@@ -114,7 +116,7 @@ export default function DayScreen() {
     addToast('You voted to skip discussion', 'system');
   };
 
-  const relevantLogs = logs.filter(l => l.round === round || l.type === 'death');
+  const relevantLogs = logs.filter(l => (l.round === round || l.type === 'death') && l.type !== 'chat');
   const currentChat = (chatMessages || []).filter(m => m.round === round);
 
   const skipCount = Object.keys(skipVotes).length;
@@ -131,6 +133,22 @@ export default function DayScreen() {
       addToast('Majority voted to skip! Voting begins.', 'system');
     }
   }, [skipCount, majority, phase, isOnline, addToast]);
+
+  // Periodic AI chat during discussion
+  useEffect(() => {
+    if (isOnline || phase !== 'discussion') return;
+    const scheduleNext = () => {
+      const delay = 6000 + Math.floor(Math.random() * 10000); // 6-16 seconds
+      return setTimeout(() => {
+        aiAutoChat();
+        if (phaseRef.current === 'discussion') {
+          timerId = scheduleNext();
+        }
+      }, delay);
+    };
+    let timerId = scheduleNext();
+    return () => clearTimeout(timerId);
+  }, [phase, isOnline, aiAutoChat]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);

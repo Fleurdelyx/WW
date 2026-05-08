@@ -74,6 +74,7 @@ export const useGameStore = create<{
   setDawnReady: () => void;
   castVote: (targetId: string) => void;
   sendChat: (message: string) => void;
+  aiAutoChat: () => void;
   voteSkipDiscussion: () => void;
   nextRound: () => void;
   resetGame: () => void;
@@ -472,6 +473,28 @@ export const useGameStore = create<{
       }
     }
 
+    return { state: { ...d.state, chatMessages, logs } };
+  }),
+
+  aiAutoChat: () => set(d => {
+    if (d.state.mode === 'online') return d;
+    const aliveAI = d.state.players.filter(p => p.isAlive && !p.isHuman);
+    if (aliveAI.length === 0) return d;
+    // Pick 1-2 random AI to speak
+    const shuffled = [...aliveAI].sort(() => Math.random() - 0.5);
+    const speakers = shuffled.slice(0, Math.floor(Math.random() * 2) + 1);
+    const chatMessages = [...(d.state.chatMessages || [])];
+    const logs = [...d.state.logs];
+    let added = false;
+    for (const ai of speakers) {
+      const aiChat = generateAiChat(ai, d.state.players, d.state.round);
+      if (aiChat) {
+        chatMessages.push(aiChat);
+        logs.push(makeLog(d.state.round, `${aiChat.senderName}: ${aiChat.message}`, 'chat'));
+        added = true;
+      }
+    }
+    if (!added) return d;
     return { state: { ...d.state, chatMessages, logs } };
   }),
 
