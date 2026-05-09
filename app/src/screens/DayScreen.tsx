@@ -57,6 +57,9 @@ export default function DayScreen() {
   const [discussionTimer, setDiscussionTimer] = useState(settings.discussionTimerSeconds);
   const [tensionShake, setTensionShake] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatLenRef = useRef(0);
+  const deadChatLenRef = useRef(0);
+  const whispersLenRef = useRef(0);
   const human = players.find(p => p.id === humanPlayerId);
   const { toasts, addToast, removeToast } = useToasts();
 
@@ -161,9 +164,19 @@ export default function DayScreen() {
   const majority = Math.floor(aliveCount / 2) + 1;
   const hasSkipVoted = !!skipVotes[humanPlayerId];
 
+  // Only auto-scroll when new messages arrive, not on logs/round changes
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs, chatMessages, deadChatMessages, whispers, round, showDeadChat]);
+    const chatLen = currentChat.length;
+    const deadLen = currentDeadChat.length;
+    const whispLen = currentWhispers.length;
+    const hasNew = chatLen > chatLenRef.current || deadLen > deadChatLenRef.current || whispLen > whispersLenRef.current;
+    chatLenRef.current = chatLen;
+    deadChatLenRef.current = deadLen;
+    whispersLenRef.current = whispLen;
+    if (hasNew) {
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+    }
+  }, [currentChat.length, currentDeadChat.length, currentWhispers.length]);
 
   useEffect(() => {
     if (!isOnline && phase === 'discussion' && skipCount >= majority) {
@@ -408,37 +421,43 @@ export default function DayScreen() {
 
             {/* Messages area */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
-              <AnimatePresence>
-                {showDeadChat && canSeeDeadChat ? (
-                  currentDeadChat.map((msg) => (
+              {showDeadChat && canSeeDeadChat ? (
+                <AnimatePresence>
+                  {currentDeadChat.length === 0 && (
+                    <p className="text-text-muted text-xs text-center py-8">The spirits are silent...</p>
+                  )}
+                  {currentDeadChat.map((msg) => (
                     <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
-                  ))
-                ) : (
-                  currentChat.map((msg) => (
-                    <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
-                  ))
-                )}
-              </AnimatePresence>
-              {currentWhispers.map(w => (
-                <ChatBubble key={w.id} msg={w} humanId={humanPlayerId} isWhisper />
-              ))}
-              {relevantLogs.slice(-15).map(log => (
-                <motion.div
-                  key={log.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className={`text-xs px-2 py-1 rounded ${
-                    log.type === 'death' ? 'text-werewolf-red bg-werewolf-red/10' :
-                    log.type === 'vote' ? 'text-accent-gold bg-accent-gold/10' :
-                    log.type === 'reveal' ? 'text-accent-purple bg-accent-purple/10' :
-                    log.type === 'chat' ? 'text-text-secondary' :
-                    'text-text-secondary bg-bg-elevated/30'
-                  }`}
-                >
-                  <span className="text-text-muted text-[10px]">[D{log.round}]</span>{' '}
-                  {log.message}
-                </motion.div>
-              ))}
+                  ))}
+                </AnimatePresence>
+              ) : (
+                <>
+                  <AnimatePresence>
+                    {currentChat.map((msg) => (
+                      <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
+                    ))}
+                  </AnimatePresence>
+                  {currentWhispers.map(w => (
+                    <ChatBubble key={w.id} msg={w} humanId={humanPlayerId} isWhisper />
+                  ))}
+                  {relevantLogs.slice(-15).map(log => (
+                    <motion.div
+                      key={log.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className={`text-xs px-2 py-1 rounded ${
+                        log.type === 'death' ? 'text-werewolf-red bg-werewolf-red/10' :
+                        log.type === 'vote' ? 'text-accent-gold bg-accent-gold/10' :
+                        log.type === 'reveal' ? 'text-accent-purple bg-accent-purple/10' :
+                        'text-text-secondary bg-bg-elevated/30'
+                      }`}
+                    >
+                      <span className="text-text-muted text-[10px]">[D{log.round}]</span>{' '}
+                      {log.message}
+                    </motion.div>
+                  ))}
+                </>
+              )}
               <div ref={chatEndRef} />
             </div>
 

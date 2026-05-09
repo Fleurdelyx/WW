@@ -705,7 +705,6 @@ export const useGameStore = create<{
       message: message.trim(),
       round: d.state.round,
     }];
-    const logs = [...d.state.logs, makeLog(d.state.round, `${human.name} (dead chat): ${message.trim()}`, 'chat')];
 
     // AI dead chat responses from dead AI players occasionally
     const deadAI = d.state.players.filter(p => !p.isAlive && !p.isHuman);
@@ -726,11 +725,10 @@ export const useGameStore = create<{
           message: msg,
           round: d.state.round,
         });
-        logs.push(makeLog(d.state.round, `${ai.name} (dead chat): ${msg}`, 'chat'));
       }
     }
 
-    return { state: { ...d.state, deadChatMessages, logs } };
+    return { state: { ...d.state, deadChatMessages } };
   }),
 
   sendWhisper: (targetId, message) => set(d => {
