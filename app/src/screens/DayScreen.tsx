@@ -57,6 +57,7 @@ export default function DayScreen() {
   const [discussionTimer, setDiscussionTimer] = useState(settings.discussionTimerSeconds);
   const [tensionShake, setTensionShake] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatLenRef = useRef(0);
   const deadChatLenRef = useRef(0);
   const whispersLenRef = useRef(0);
@@ -164,7 +165,7 @@ export default function DayScreen() {
   const majority = Math.floor(aliveCount / 2) + 1;
   const hasSkipVoted = !!skipVotes[humanPlayerId];
 
-  // Only auto-scroll when new messages arrive, not on logs/round changes
+  // Only auto-scroll when new messages arrive AND user is near bottom
   useEffect(() => {
     const chatLen = currentChat.length;
     const deadLen = currentDeadChat.length;
@@ -174,7 +175,13 @@ export default function DayScreen() {
     deadChatLenRef.current = deadLen;
     whispersLenRef.current = whispLen;
     if (hasNew) {
-      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+      const container = chatContainerRef.current;
+      if (container) {
+        const isNearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 100;
+        if (isNearBottom) {
+          setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+        }
+      }
     }
   }, [currentChat.length, currentDeadChat.length, currentWhispers.length]);
 
@@ -420,7 +427,7 @@ export default function DayScreen() {
             </div>
 
             {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2">
               {showDeadChat && canSeeDeadChat ? (
                 <AnimatePresence>
                   {currentDeadChat.length === 0 && (
