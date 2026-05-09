@@ -1,5 +1,5 @@
 import type { GameState, GameSettings, GameScreen, Phase, Player, Role, Faction, GameLog, ChatMessage, ExecutionResult } from '../src/types/game';
-import { assignRoles, getFaction, getTrueFaction, tallyVotes, checkWinCondition, generateAvatar } from '../src/engine/gameEngine';
+import { assignRoles, getFaction, getTrueFaction, tallyVotes, checkWinCondition, generateAvatar, getAiNames } from '../src/engine/gameEngine';
 
 let logIdCounter = 0;
 function makeLog(round: number, message: string, type: GameLog['type']): GameLog {
@@ -28,14 +28,11 @@ interface RoomPlayer {
   witchPoisonTarget: string | null;
   sorcererTarget: string | null;
   alphaWolfTarget: string | null;
-  doctorTarget: string | null;
   vigilanteTarget: string | null;
-  vigilanteUsed: boolean;
+  doctorTarget: string | null;
   sheriffTarget: string | null;
   mediumTarget: string | null;
   mysticWolfTarget: string | null;
-  voteWeight: number;
-  princeSurvived: boolean;
   vote: string | null;
   ready: boolean;
   skipVoted: boolean;
@@ -86,10 +83,12 @@ export class GameRoom {
   playerSheriffResults: Map<string, { playerId: string; role: Role }> = new Map();
   playerMediumResults: Map<string, { playerId: string; role: Role }> = new Map();
   playerMysticWolfResults: Map<string, { playerId: string; faction: Faction }> = new Map();
-  gravediggerResult: { playerId: string; role: Role } | null = null;
   nightWerewolfTarget: string | null = null;
   witchHealUsed: boolean = false;
   witchPoisonUsed: boolean = false;
+  vigilanteUsed: boolean = false;
+  princeSurvived: boolean = false;
+  gravediggerResult: { playerId: string; role: Role } | null = null;
   private nightTimer: NodeJS.Timeout | null = null;
   private voteTimer: NodeJS.Timeout | null = null;
 
@@ -117,14 +116,11 @@ export class GameRoom {
       witchPoisonTarget: null,
       sorcererTarget: null,
       alphaWolfTarget: null,
-      doctorTarget: null,
       vigilanteTarget: null,
-      vigilanteUsed: false,
+      doctorTarget: null,
       sheriffTarget: null,
       mediumTarget: null,
       mysticWolfTarget: null,
-      voteWeight: 1,
-      princeSurvived: false,
       vote: null,
       ready: false,
       skipVoted: false,
@@ -182,14 +178,11 @@ export class GameRoom {
       p.witchPoisonTarget = null;
       p.sorcererTarget = null;
       p.alphaWolfTarget = null;
-      p.doctorTarget = null;
       p.vigilanteTarget = null;
-      p.vigilanteUsed = false;
+      p.doctorTarget = null;
       p.sheriffTarget = null;
       p.mediumTarget = null;
       p.mysticWolfTarget = null;
-      p.voteWeight = p.role === 'mayor' ? 2 : 1;
-      p.princeSurvived = false;
       p.vote = null;
       p.ready = false;
       p.skipVoted = false;
@@ -212,10 +205,12 @@ export class GameRoom {
     this.playerSheriffResults.clear();
     this.playerMediumResults.clear();
     this.playerMysticWolfResults.clear();
-    this.gravediggerResult = null;
     this.nightWerewolfTarget = null;
     this.witchHealUsed = false;
     this.witchPoisonUsed = false;
+    this.vigilanteUsed = false;
+    this.princeSurvived = false;
+    this.gravediggerResult = null;
   }
 
   setPlayerReady(playerId: string) {
@@ -265,11 +260,7 @@ export class GameRoom {
       }
     }
 
-    if (player.role === 'seer') {
-      return true;
-    }
-
-    if (player.role === 'villager') {
+    if (player.role === 'seer' || player.role === 'sheriff' || player.role === 'medium' || player.role === 'mysticWolf' || player.role === 'villager') {
       return true;
     }
 
@@ -314,6 +305,13 @@ export class GameRoom {
     }
   }
 
+  submitVigilanteAction(playerId: string, targetId: string) {
+    const player = this.players.find(p => p.id === playerId);
+    if (player && player.isAlive && player.role === 'vigilante' && !this.vigilanteUsed) {
+      player.vigilanteTarget = targetId;
+    }
+  }
+
   submitDoctorAction(playerId: string, targetId: string) {
     const player = this.players.find(p => p.id === playerId);
     if (player && player.isAlive && player.role === 'doctor') {
@@ -321,17 +319,14 @@ export class GameRoom {
     }
   }
 
-  submitVigilanteAction(playerId: string, targetId: string) {
-    const player = this.players.find(p => p.id === playerId);
-    if (player && player.isAlive && player.role === 'vigilante' && !player.vigilanteUsed) {
-      player.vigilanteTarget = targetId;
-    }
-  }
-
   submitSheriffAction(playerId: string, targetId: string) {
     const player = this.players.find(p => p.id === playerId);
     if (player && player.isAlive && player.role === 'sheriff') {
       player.sheriffTarget = targetId;
+      const target = this.players.find(p => p.id === targetId);
+      if (target) {
+        this.playerSheriffResults.set(playerId, { playerId: target.id, role: target.role });
+      }
     }
   }
 
@@ -339,6 +334,10 @@ export class GameRoom {
     const player = this.players.find(p => p.id === playerId);
     if (player && player.isAlive && player.role === 'medium') {
       player.mediumTarget = targetId;
+      const target = this.players.find(p => p.id === targetId);
+      if (target) {
+        this.playerMediumResults.set(playerId, { playerId: target.id, role: target.role });
+      }
     }
   }
 
@@ -346,6 +345,11 @@ export class GameRoom {
     const player = this.players.find(p => p.id === playerId);
     if (player && player.isAlive && player.role === 'mysticWolf') {
       player.mysticWolfTarget = targetId;
+      const target = this.players.find(p => p.id === targetId);
+      if (target) {
+        const shownFaction = target.role === 'minion' ? 'village' : target.faction;
+        this.playerMysticWolfResults.set(playerId, { playerId: target.id, faction: shownFaction });
+      }
     }
   }
 
@@ -359,11 +363,15 @@ export class GameRoom {
     const villagers = alive.filter(p => p.role === 'villager');
     const minions = alive.filter(p => p.role === 'minion');
     const hunters = alive.filter(p => p.role === 'hunter');
-    const doctors = alive.filter(p => p.role === 'doctor');
     const vigilantes = alive.filter(p => p.role === 'vigilante');
+    const doctors = alive.filter(p => p.role === 'doctor');
     const sheriffs = alive.filter(p => p.role === 'sheriff');
     const mediums = alive.filter(p => p.role === 'medium');
     const mysticWolves = alive.filter(p => p.role === 'mysticWolf');
+    const mayors = alive.filter(p => p.role === 'mayor');
+    const gravediggers = alive.filter(p => p.role === 'gravedigger');
+    const lycans = alive.filter(p => p.role === 'lycan');
+    const princes = alive.filter(p => p.role === 'prince');
 
     const wolvesReady = wolves.length === 0 || wolves.every(w => w.nightAction !== null || w.alphaWolfTarget !== null);
     const seersReady = seers.every(s => s.nightAction !== null);
@@ -373,13 +381,17 @@ export class GameRoom {
     const villagersReady = true;
     const minionsReady = true;
     const huntersReady = true;
+    const vigilantesReady = vigilantes.every(v => v.vigilanteTarget !== null || this.vigilanteUsed);
     const doctorsReady = doctors.every(d => d.doctorTarget !== null);
-    const vigilantesReady = vigilantes.every(v => v.vigilanteUsed || v.vigilanteTarget !== null);
     const sheriffsReady = sheriffs.every(s => s.sheriffTarget !== null);
-    const mediumsReady = mediums.every(m => m.mediumTarget !== null);
-    const mysticWolvesReady = mysticWolves.every(m => m.mysticWolfTarget !== null);
+    const mediumsReady = mediums.every(m => m.mediumTarget !== null || this.players.filter(p => !p.isAlive).length === 0);
+    const mysticWolvesReady = mysticWolves.every(mw => mw.mysticWolfTarget !== null);
+    const mayorsReady = true;
+    const gravediggersReady = true;
+    const lycansReady = true;
+    const princesReady = true;
 
-    return wolvesReady && seersReady && bodyguardsReady && witchesReady && sorcerersReady && villagersReady && minionsReady && huntersReady && doctorsReady && vigilantesReady && sheriffsReady && mediumsReady && mysticWolvesReady;
+    return wolvesReady && seersReady && bodyguardsReady && witchesReady && sorcerersReady && villagersReady && minionsReady && huntersReady && vigilantesReady && doctorsReady && sheriffsReady && mediumsReady && mysticWolvesReady && mayorsReady && gravediggersReady && lycansReady && princesReady;
   }
 
   processNight() {
@@ -411,19 +423,19 @@ export class GameRoom {
       if (this.nightWerewolfTarget) {
         const bgTarget = this.players.find(p => p.isAlive && p.role === 'bodyguard')?.bodyguardTarget;
         const witchHeal = this.players.find(p => p.isAlive && p.role === 'witch')?.witchHealTarget;
-        const doctorTarget = this.players.find(p => p.isAlive && p.role === 'doctor')?.doctorTarget;
+        const docTarget = this.players.find(p => p.isAlive && p.role === 'doctor')?.doctorTarget;
 
         if (bgTarget === this.nightWerewolfTarget) {
           werewolfKillBlocked = true;
           newLogs.push(makeLog(this.round, 'The Bodyguard protected someone from the Werewolves!', 'action'));
         }
-        if (doctorTarget === this.nightWerewolfTarget) {
-          werewolfKillBlocked = true;
-          newLogs.push(makeLog(this.round, 'The Doctor healed someone, saving them from the Werewolves!', 'action'));
-        }
         if (witchHeal === this.nightWerewolfTarget && !this.witchHealUsed) {
           werewolfKillBlocked = true;
           newLogs.push(makeLog(this.round, 'The Witch used her healing potion to save someone!', 'action'));
+        }
+        if (docTarget === this.nightWerewolfTarget) {
+          werewolfKillBlocked = true;
+          newLogs.push(makeLog(this.round, 'The Doctor saved someone from death!', 'action'));
         }
 
         if (!werewolfKillBlocked) {
@@ -443,31 +455,14 @@ export class GameRoom {
       }
     }
 
-    // Vigilante kill
-    const vigilante = this.players.find(p => p.isAlive && p.role === 'vigilante');
-    if (vigilante && vigilante.vigilanteTarget && !vigilante.vigilanteUsed) {
-      const target = this.players.find(p => p.id === vigilante.vigilanteTarget);
-      if (target && target.isAlive) {
-        const doctorTarget = this.players.find(p => p.isAlive && p.role === 'doctor')?.doctorTarget;
-        if (doctorTarget === target.id) {
-          newLogs.push(makeLog(this.round, 'The Doctor healed someone, saving them from the Vigilante!', 'action'));
-        } else {
-          target.isAlive = false;
-          vigilanteKilled = target;
-          newLogs.push(makeLog(this.round, `${target.name} was shot by the Vigilante.`, 'death'));
-        }
-        vigilante.vigilanteUsed = true;
-      }
-    }
-
     // Witch poison
     const witch = this.players.find(p => p.isAlive && p.role === 'witch');
     if (witch && witch.witchPoisonTarget && !this.witchPoisonUsed) {
       const poisonTarget = this.players.find(p => p.id === witch.witchPoisonTarget);
       if (poisonTarget && poisonTarget.isAlive) {
-        const doctorTarget = this.players.find(p => p.isAlive && p.role === 'doctor')?.doctorTarget;
-        if (doctorTarget === poisonTarget.id) {
-          newLogs.push(makeLog(this.round, 'The Doctor healed someone, saving them from the Witch\'s poison!', 'action'));
+        const docTarget = this.players.find(p => p.isAlive && p.role === 'doctor')?.doctorTarget;
+        if (docTarget === witch.witchPoisonTarget) {
+          newLogs.push(makeLog(this.round, 'The Doctor saved someone from the Witch\'s poison!', 'action'));
         } else {
           poisonTarget.isAlive = false;
           witchKilled = poisonTarget;
@@ -476,9 +471,27 @@ export class GameRoom {
       }
     }
 
+    // Vigilante kill
+    const vigilante = this.players.find(p => p.isAlive && p.role === 'vigilante');
+    if (vigilante && vigilante.vigilanteTarget && !this.vigilanteUsed) {
+      const vigTarget = this.players.find(p => p.id === vigilante.vigilanteTarget);
+      if (vigTarget && vigTarget.isAlive) {
+        const docTarget = this.players.find(p => p.isAlive && p.role === 'doctor')?.doctorTarget;
+        if (docTarget === vigilante.vigilanteTarget) {
+          newLogs.push(makeLog(this.round, 'The Doctor saved someone from the Vigilante!', 'action'));
+        } else {
+          vigTarget.isAlive = false;
+          vigilanteKilled = vigTarget;
+          newLogs.push(makeLog(this.round, `${vigTarget.name} was found shot by a Vigilante this morning.`, 'death'));
+        }
+      }
+      this.vigilanteUsed = true;
+    }
+
     // Hunter night revenge
+    const anyNightKilled = killed || witchKilled || vigilanteKilled;
     if (killed && killed.role === 'hunter') {
-      const hunterRevengeTargets = this.players.filter(p => p.isAlive && p.id !== killed!.id);
+      const hunterRevengeTargets = this.players.filter(p => p.isAlive && p.id !== killed.id);
       if (hunterRevengeTargets.length > 0) {
         const revengeTarget = hunterRevengeTargets[Math.floor(Math.random() * hunterRevengeTargets.length)];
         const revengeIdx = this.players.findIndex(p => p.id === revengeTarget.id);
@@ -496,7 +509,6 @@ export class GameRoom {
       if (seer.nightAction) {
         const target = this.players.find(p => p.id === seer.nightAction);
         if (target) {
-          // Minion appears as village to Seer
           const shownFaction = target.role === 'minion' ? 'village' : target.faction;
           this.playerSeerResults.set(seer.id, { playerId: target.id, faction: shownFaction });
         }
@@ -546,25 +558,26 @@ export class GameRoom {
       if (mw.mysticWolfTarget) {
         const target = this.players.find(p => p.id === mw.mysticWolfTarget);
         if (target) {
-          const shownFaction = getFaction(target.role);
+          const shownFaction = target.role === 'minion' ? 'village' : target.faction;
           this.playerMysticWolfResults.set(mw.id, { playerId: target.id, faction: shownFaction });
         }
       }
     }
 
     // Gravedigger auto-reveal
-    const nightVictim = killed || vigilanteKilled || witchKilled;
-    if (nightVictim) {
-      this.gravediggerResult = { playerId: nightVictim.id, role: nightVictim.role };
-    } else {
-      this.gravediggerResult = null;
+    if (killed) {
+      this.gravediggerResult = { playerId: killed.id, role: killed.role };
+    } else if (witchKilled) {
+      this.gravediggerResult = { playerId: witchKilled.id, role: witchKilled.role };
+    } else if (vigilanteKilled) {
+      this.gravediggerResult = { playerId: vigilanteKilled.id, role: vigilanteKilled.role };
     }
 
     // Track witch potions
     if (witch?.witchHealTarget) this.witchHealUsed = true;
     if (witch?.witchPoisonTarget) this.witchPoisonUsed = true;
 
-    this.lastKilled = nightVictim ? this.toPublicPlayer(nightVictim) : null;
+    this.lastKilled = killed ? this.toPublicPlayer(killed) : null;
     this.logs = newLogs;
     this.winner = checkWinCondition(this.players.map(p => this.toPublicPlayer(p)));
 
@@ -576,8 +589,8 @@ export class GameRoom {
       p.witchPoisonTarget = null;
       p.sorcererTarget = null;
       p.alphaWolfTarget = null;
-      p.doctorTarget = null;
       p.vigilanteTarget = null;
+      p.doctorTarget = null;
       p.sheriffTarget = null;
       p.mediumTarget = null;
       p.mysticWolfTarget = null;
@@ -607,45 +620,52 @@ export class GameRoom {
 
   processVotes() {
     const votes: Record<string, string> = {};
-    this.players.forEach(p => { if (p.isAlive && p.vote) votes[p.id] = p.vote; });
+    this.players.forEach(p => { if (p.vote) votes[p.id] = p.vote; });
 
     const mayor = this.players.find(p => p.isAlive && p.role === 'mayor');
-    const { eliminated, voteCounts } = tallyVotes(votes, this.players.map(p => this.toPublicPlayer(p)), mayor?.id || null);
+    const mayorId = mayor ? mayor.id : null;
+    const { eliminated, voteCounts } = tallyVotes(votes, this.players.map(p => this.toPublicPlayer(p)), mayorId);
     const newLogs = [...this.logs];
 
     let newPlayers = [...this.players];
     let winner: Faction | null = null;
-    let actuallyKilled = false;
 
     if (eliminated) {
       const idx = newPlayers.findIndex(p => p.id === eliminated.id);
       if (idx !== -1) {
-        if (eliminated.role === 'prince') {
-          if (!newPlayers[idx].princeSurvived) {
-            newPlayers[idx].princeSurvived = true;
-            actuallyKilled = false;
-            newLogs.push(makeLog(this.round, `${eliminated.name} is the Prince! They survive the vote.`, 'action'));
-          } else {
-            actuallyKilled = true;
-          }
-        } else {
-          actuallyKilled = true;
+        // Prince survival
+        if (eliminated.role === 'prince' && !this.princeSurvived) {
+          newLogs.push(makeLog(this.round, 'The Prince revealed himself and survived the vote!', 'system'));
+          winner = checkWinCondition(newPlayers.map(p => this.toPublicPlayer(p)));
+          this.players = newPlayers;
+          this.logs = newLogs;
+          this.winner = winner;
+          this.executionResult = {
+            eliminated: null,
+            voteCounts,
+            wasTie: false,
+            noVotes: Object.keys(votes).length === 0,
+          };
+          this.screen = winner ? 'game-over' : 'execution';
+          this.phase = winner ? 'game-over' : 'execution';
+          this.princeSurvived = true;
+          this.players.forEach(p => { p.vote = null; p.skipVoted = false; });
+          this.resetReady();
+          return;
         }
 
-        if (actuallyKilled) {
-          newPlayers[idx] = { ...newPlayers[idx], isAlive: false };
-          newLogs.push(makeLog(this.round, `${eliminated.name} was eliminated. They were a ${eliminated.role.toUpperCase()}!`, 'death'));
+        newPlayers[idx] = { ...newPlayers[idx], isAlive: false };
+        newLogs.push(makeLog(this.round, `${eliminated.name} was eliminated. They were a ${eliminated.role.toUpperCase()}!`, 'death'));
 
-          // Hunter revenge
-          if (eliminated.role === 'hunter') {
-            const aliveOthers = newPlayers.filter(p => p.isAlive && p.id !== eliminated.id);
-            if (aliveOthers.length > 0) {
-              const revengeTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
-              const revengeIdx = newPlayers.findIndex(p => p.id === revengeTarget.id);
-              if (revengeIdx !== -1) {
-                newPlayers[revengeIdx] = { ...newPlayers[revengeIdx], isAlive: false };
-                newLogs.push(makeLog(this.round, `${eliminated.name} fired their rifle in revenge! ${revengeTarget.name} was killed!`, 'death'));
-              }
+        // Hunter revenge
+        if (eliminated.role === 'hunter') {
+          const aliveOthers = newPlayers.filter(p => p.isAlive && p.id !== eliminated.id);
+          if (aliveOthers.length > 0) {
+            const revengeTarget = aliveOthers[Math.floor(Math.random() * aliveOthers.length)];
+            const revengeIdx = newPlayers.findIndex(p => p.id === revengeTarget.id);
+            if (revengeIdx !== -1) {
+              newPlayers[revengeIdx] = { ...newPlayers[revengeIdx], isAlive: false };
+              newLogs.push(makeLog(this.round, `${eliminated.name} fired their rifle in revenge! ${revengeTarget.name} was killed!`, 'death'));
             }
           }
         }
@@ -662,7 +682,7 @@ export class GameRoom {
     const noVotes = Object.keys(votes).length === 0;
 
     this.executionResult = {
-      eliminated: eliminated && actuallyKilled ? { ...this.toPublicPlayer(eliminated), isAlive: true } : null,
+      eliminated: eliminated ? { ...this.toPublicPlayer(eliminated), isAlive: true } : null,
       voteCounts,
       wasTie,
       noVotes,
@@ -708,7 +728,7 @@ export class GameRoom {
 
   addDeadChat(playerId: string, playerName: string, message: string) {
     this.deadChatMessages.push({
-      id: `dead-chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `dead-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       senderId: playerId,
       senderName: playerName,
       message: message.trim(),
@@ -736,17 +756,10 @@ export class GameRoom {
     this.playerSheriffResults.clear();
     this.playerMediumResults.clear();
     this.playerMysticWolfResults.clear();
-    this.gravediggerResult = null;
     this.lastKilled = null;
+    this.gravediggerResult = null;
     this.resetReady();
-    this.players.forEach(p => {
-      p.skipVoted = false;
-      p.doctorTarget = null;
-      p.vigilanteTarget = null;
-      p.sheriffTarget = null;
-      p.mediumTarget = null;
-      p.mysticWolfTarget = null;
-    });
+    this.players.forEach(p => { p.skipVoted = false; });
     this.phase = 'night';
     this.screen = 'night';
     this.logs.push(makeLog(this.round, `Night ${this.round} falls... The village sleeps.`, 'system'));
@@ -795,20 +808,17 @@ export class GameRoom {
       };
     });
 
-    const seerResult = me?.role === 'seer' ? (this.playerSeerResults.get(playerId) || null) : null;
-    const sorcererResult = me?.role === 'sorcerer' ? (this.playerSorcererResults.get(playerId) || null) : null;
-    const sheriffResult = me?.role === 'sheriff' ? (this.playerSheriffResults.get(playerId) || null) : null;
-    const mediumResult = me?.role === 'medium' ? (this.playerMediumResults.get(playerId) || null) : null;
-    const mysticWolfResult = me?.role === 'mysticWolf' ? (this.playerMysticWolfResults.get(playerId) || null) : null;
-    const gravediggerResult = me?.role === 'gravedigger' ? this.gravediggerResult : null;
+    let seerResult = me?.role === 'seer' ? (this.playerSeerResults.get(playerId) || null) : null;
+    let sorcererResult = me?.role === 'sorcerer' ? (this.playerSorcererResults.get(playerId) || null) : null;
+    let sheriffResult = me?.role === 'sheriff' ? (this.playerSheriffResults.get(playerId) || null) : null;
+    let mediumResult = me?.role === 'medium' ? (this.playerMediumResults.get(playerId) || null) : null;
+    let mysticWolfResult = me?.role === 'mysticWolf' ? (this.playerMysticWolfResults.get(playerId) || null) : null;
 
     const aliveWerewolves = this.players.filter(p => p.isAlive && getTrueFaction(p.role) === 'werewolf').length;
     const aliveVillagers = this.players.filter(p => p.isAlive && getTrueFaction(p.role) === 'village').length;
 
     const skipVotes: Record<string, boolean> = {};
     this.players.forEach(p => { if (p.skipVoted) skipVotes[p.id] = true; });
-
-    const showDeadChat = !me?.isAlive || me?.role === 'medium';
 
     return {
       screen: this.screen,
@@ -820,9 +830,9 @@ export class GameRoom {
       seerCheckResult: seerResult,
       sorcererCheckResult: sorcererResult,
       sheriffCheckResult: sheriffResult,
-      gravediggerResult,
+      gravediggerResult: this.gravediggerResult,
       mediumCheckResult: mediumResult,
-      mysticWolfResult,
+      mysticWolfResult: mysticWolfResult,
       votes: {},
       lastKilled: this.lastKilled,
       winner: this.winner,
@@ -831,7 +841,7 @@ export class GameRoom {
       isProcessingAI: false,
       executionResult: this.executionResult,
       chatMessages: this.chatMessages,
-      deadChatMessages: showDeadChat ? this.deadChatMessages : [],
+      deadChatMessages: this.deadChatMessages,
       whispers: this.whispers,
       dawnReady: {},
       skipVotes,
@@ -842,18 +852,18 @@ export class GameRoom {
       witchPoisonTarget: me?.witchPoisonTarget || null,
       hunterTarget: null,
       alphaWolfTarget: me?.alphaWolfTarget || null,
+      vigilanteTarget: me?.vigilanteTarget || null,
+      vigilanteUsed: this.vigilanteUsed,
+      doctorTarget: me?.doctorTarget || null,
+      mediumTarget: me?.mediumTarget || null,
+      sheriffTarget: me?.sheriffTarget || null,
+      mysticWolfTarget: me?.mysticWolfTarget || null,
+      princeSurvived: this.princeSurvived,
       mode: 'online' as const,
       roomCode: this.code,
       isHost: me?.isHost || false,
       aliveWerewolfCount: aliveWerewolves,
       aliveVillagerCount: aliveVillagers,
-      doctorTarget: me?.doctorTarget || null,
-      vigilanteTarget: me?.vigilanteTarget || null,
-      vigilanteUsed: me?.vigilanteUsed ?? false,
-      mediumTarget: me?.mediumTarget || null,
-      sheriffTarget: me?.sheriffTarget || null,
-      mysticWolfTarget: me?.mysticWolfTarget || null,
-      princeSurvived: me?.princeSurvived || false,
     };
   }
 
@@ -900,18 +910,18 @@ export class GameRoom {
       witchPoisonTarget: null,
       hunterTarget: null,
       alphaWolfTarget: null,
+      vigilanteTarget: null,
+      vigilanteUsed: false,
+      doctorTarget: null,
+      mediumTarget: null,
+      sheriffTarget: null,
+      mysticWolfTarget: null,
+      princeSurvived: false,
       mode: 'online' as const,
       roomCode: this.code,
       isHost: false,
       aliveWerewolfCount: 0,
       aliveVillagerCount: 0,
-      doctorTarget: null,
-      vigilanteTarget: null,
-      vigilanteUsed: false,
-      mediumTarget: null,
-      sheriffTarget: null,
-      mysticWolfTarget: null,
-      princeSurvived: false,
     };
   }
 }
