@@ -106,6 +106,7 @@ export const useGameStore = create<{
   sendWhisper: (targetId: string, message: string) => void;
   aiAutoChat: () => void;
   voteSkipDiscussion: () => void;
+  voteSkipElimination: () => void;
   nextRound: () => void;
   resetGame: () => void;
   goHome: () => void;
@@ -666,7 +667,7 @@ export const useGameStore = create<{
       return d;
     }
     const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
-    if (!human || !message.trim()) return d;
+    if (!human || !human.isAlive || !message.trim()) return d;
     const chatMessages = [...(d.state.chatMessages || []), {
       id: `chat-${Date.now()}`,
       senderId: human.id,
@@ -746,6 +747,7 @@ export const useGameStore = create<{
       id: `whisper-${Date.now()}`,
       senderId: human.id,
       senderName: human.name,
+      targetId,
       message: message.trim(),
       round: d.state.round,
     }];
@@ -796,6 +798,49 @@ export const useGameStore = create<{
 
     if (skipCount >= majority) {
       return { state: { ...d.state, phase: 'voting', skipVotes: newSkipVotes } };
+    }
+
+    return { state: { ...d.state, skipVotes: newSkipVotes } };
+  }),
+
+  voteSkipElimination: () => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('voteSkipElimination');
+      return { state: { ...d.state, skipVotes: { ...d.state.skipVotes, [d.state.humanPlayerId]: true } } };
+    }
+    const humanId = d.state.humanPlayerId;
+    const newSkipVotes = { ...d.state.skipVotes, [humanId]: true };
+
+    // AI skip votes
+    const alivePlayers = d.state.players.filter(p => p.isAlive);
+    for (const p of alivePlayers) {
+      if (newSkipVotes[p.id]) continue;
+      if (generateAiSkipVote(p)) {
+        newSkipVotes[p.id] = true;
+      }
+    }
+
+    const skipCount = Object.keys(newSkipVotes).length;
+    const majority = Math.floor(alivePlayers.length / 2) + 1;
+
+    if (skipCount >= majority) {
+      const newLogs = [...d.state.logs, makeLog(d.state.round, 'The village could not decide. No one was eliminated.', 'system')];
+      return {
+        state: {
+          ...d.state,
+          phase: 'execution',
+          screen: 'execution',
+          skipVotes: {},
+          votes: {},
+          logs: newLogs,
+          executionResult: {
+            eliminated: null,
+            voteCounts: {},
+            wasTie: false,
+            noVotes: true,
+          },
+        },
+      };
     }
 
     return { state: { ...d.state, skipVotes: newSkipVotes } };

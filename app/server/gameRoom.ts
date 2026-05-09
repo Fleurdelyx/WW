@@ -716,6 +716,28 @@ export class GameRoom {
     return skipCount >= majority;
   }
 
+  shouldSkipElimination(): boolean {
+    const alive = this.players.filter(p => p.isAlive);
+    const skipCount = alive.filter(p => p.skipVoted).length;
+    const majority = Math.floor(alive.length / 2) + 1;
+    return skipCount >= majority;
+  }
+
+  skipElimination() {
+    const newLogs = [...this.logs, makeLog(this.round, 'The village could not decide. No one was eliminated.', 'system')];
+    this.players.forEach(p => { p.vote = null; p.skipVoted = false; });
+    this.resetReady();
+    this.executionResult = {
+      eliminated: null,
+      voteCounts: {},
+      wasTie: false,
+      noVotes: true,
+    };
+    this.logs = newLogs;
+    this.phase = 'execution';
+    this.screen = 'execution';
+  }
+
   addChat(playerId: string, playerName: string, message: string) {
     this.chatMessages.push({
       id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -736,11 +758,12 @@ export class GameRoom {
     });
   }
 
-  addWhisper(playerId: string, playerName: string, message: string) {
+  addWhisper(playerId: string, playerName: string, targetId: string, message: string) {
     this.whispers.push({
       id: `whisper-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       senderId: playerId,
       senderName: playerName,
+      targetId,
       message: message.trim(),
       round: this.round,
     });
@@ -842,7 +865,7 @@ export class GameRoom {
       executionResult: this.executionResult,
       chatMessages: this.chatMessages,
       deadChatMessages: this.deadChatMessages,
-      whispers: this.whispers,
+      whispers: this.whispers.filter(w => w.senderId === playerId || w.targetId === playerId),
       dawnReady: {},
       skipVotes,
       bodyguardTarget: me?.bodyguardTarget || null,

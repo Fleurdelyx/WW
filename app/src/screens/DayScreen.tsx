@@ -10,9 +10,10 @@ import ParticleBackground, { FogLayer } from '@/components/ParticleBackground';
 import { ToastContainer, useToasts } from '@/components/ToastNotification';
 import { getTrueFaction, getRoleTooltip } from '@/engine/gameEngine';
 
-function ChatBubble({ msg, humanId, isWhisper }: { msg: { senderId: string; senderName: string; message: string }; humanId: string; isWhisper?: boolean }) {
+function ChatBubble({ msg, humanId, isWhisper, targetName }: { msg: { senderId: string; senderName: string; message: string }; humanId: string; isWhisper?: boolean; targetName?: string }) {
   const isMe = msg.senderId === humanId;
   if (isWhisper) {
+    const tName = targetName || 'someone';
     return (
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
@@ -21,7 +22,7 @@ function ChatBubble({ msg, humanId, isWhisper }: { msg: { senderId: string; send
         className="flex justify-center"
       >
         <div className="max-w-[80%] px-3 py-1.5 rounded-2xl text-xs italic text-text-muted/60 bg-bg-elevated/30 border border-accent-purple/10 rounded-br-md rounded-bl-md">
-          <span className="font-bold">Whisper from {msg.senderName}:</span> {msg.message}
+          <span className="font-bold">{isMe ? `Whisper to ${tName}` : `Whisper from ${msg.senderName}`}:</span> {msg.message}
         </div>
       </motion.div>
     );
@@ -46,7 +47,7 @@ function ChatBubble({ msg, humanId, isWhisper }: { msg: { senderId: string; send
 }
 
 export default function DayScreen() {
-  const { state, castVote, sendChat, startVoting, voteSkipDiscussion, aiAutoChat, sendWhisper, sendDeadChat } = useGameStore();
+  const { state, castVote, sendChat, startVoting, voteSkipDiscussion, voteSkipElimination, aiAutoChat, sendWhisper, sendDeadChat } = useGameStore();
   const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost, settings, skipVotes, deadChatMessages, whispers } = state;
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [localPhase, setLocalPhase] = useState<'discussion' | 'voting'>('discussion');
@@ -156,10 +157,15 @@ export default function DayScreen() {
     addToast('You voted to skip discussion', 'system');
   };
 
+  const handleSkipEliminationVote = () => {
+    voteSkipElimination();
+    addToast('You voted to skip elimination', 'system');
+  };
+
   const relevantLogs = logs.filter(l => (l.round === round || l.type === 'death') && l.type !== 'chat');
   const currentChat = (chatMessages || []).filter(m => m.round === round);
   const currentDeadChat = (deadChatMessages || []).filter(m => m.round === round);
-  const currentWhispers = (whispers || []).filter(m => m.round === round);
+  const currentWhispers = (whispers || []).filter(m => m.round === round && (m.senderId === humanPlayerId || m.targetId === humanPlayerId));
 
   const skipCount = Object.keys(skipVotes).length;
   const majority = Math.floor(aliveCount / 2) + 1;
@@ -439,15 +445,7 @@ export default function DayScreen() {
                 </AnimatePresence>
               ) : (
                 <>
-                  <AnimatePresence>
-                    {currentChat.map((msg) => (
-                      <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
-                    ))}
-                  </AnimatePresence>
-                  {currentWhispers.map(w => (
-                    <ChatBubble key={w.id} msg={w} humanId={humanPlayerId} isWhisper />
-                  ))}
-                  {relevantLogs.slice(-15).map(log => (
+                  {relevantLogs.slice(-5).map(log => (
                     <motion.div
                       key={log.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -463,6 +461,14 @@ export default function DayScreen() {
                       {log.message}
                     </motion.div>
                   ))}
+                  <AnimatePresence>
+                    {currentChat.map((msg) => (
+                      <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
+                    ))}
+                  </AnimatePresence>
+                  {currentWhispers.map(w => (
+                    <ChatBubble key={w.id} msg={w} humanId={humanPlayerId} isWhisper targetName={players.find(p => p.id === w.targetId)?.name} />
+                  ))}
                 </>
               )}
               <div ref={chatEndRef} />
@@ -470,7 +476,7 @@ export default function DayScreen() {
 
             {/* Chat input */}
             <AnimatePresence>
-              {phase === 'discussion' && (
+              {phase === 'discussion' && (human?.isAlive || showDeadChat) && (
                 <motion.div
                   className="border-t border-accent-purple/20 p-2 flex gap-2"
                   initial={{ opacity: 0, y: 10 }}
@@ -559,6 +565,20 @@ export default function DayScreen() {
                   <motion.p className="text-center text-text-muted text-sm">
                     You are dead and cannot vote.
                   </motion.p>
+                )}
+                {human?.isAlive && (
+                  <motion.button
+                    whileHover={{ scale: 1.02, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSkipEliminationVote}
+                    disabled={!!skipVotes[humanPlayerId]}
+                    className="w-full flex items-center justify-center gap-2 bg-bg-elevated hover:bg-bg-elevated/80 disabled:opacity-50 text-text-secondary font-medium py-2.5 rounded-xl transition-all text-sm border border-accent-purple/20"
+                  >
+                    <motion.div animate={{ x: [0, 3, 0] }} transition={{ duration: 1, repeat: Infinity }}>
+                      <FastForward className="w-4 h-4" />
+                    </motion.div>
+                    {skipVotes[humanPlayerId] ? `Skip voted (${skipCount}/${majority})` : `Vote to Skip Elimination (${skipCount}/${majority})`}
+                  </motion.button>
                 )}
                 <motion.button
                   whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(139,58,58,0.5)' }}

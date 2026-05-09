@@ -90,6 +90,11 @@ io.on('connection', (socket) => {
       socket.emit('error', { message: 'Room is full' });
       return;
     }
+    const trimmedName = name.trim();
+    if (room.players.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) {
+      socket.emit('error', { message: 'That name is already taken' });
+      return;
+    }
 
     // Leave any existing room
     const existingRoomCode = socketToRoom.get(socket.id);
@@ -364,6 +369,20 @@ io.on('connection', (socket) => {
     broadcastRoomState(room);
   });
 
+  socket.on('voteSkipElimination', () => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    room.submitSkipVote(playerId);
+    if (room.shouldSkipElimination()) {
+      room.skipElimination();
+    }
+    broadcastRoomState(room);
+  });
+
   socket.on('chat', (message: string) => {
     const roomCode = socketToRoom.get(socket.id);
     const playerId = socketToPlayerId.get(socket.id);
@@ -372,7 +391,7 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const player = room.players.find(p => p.id === playerId);
-    if (!player) return;
+    if (!player || !player.isAlive) return;
 
     room.addChat(playerId, player.name, message);
     broadcastRoomState(room);
@@ -403,7 +422,10 @@ io.on('connection', (socket) => {
     const player = room.players.find(p => p.id === playerId);
     if (!player || !player.isAlive) return;
 
-    room.addWhisper(playerId, player.name, message);
+    const target = room.players.find(p => p.id === targetId);
+    if (!target || !target.isAlive) return;
+
+    room.addWhisper(playerId, player.name, targetId, message);
     broadcastRoomState(room);
   });
 

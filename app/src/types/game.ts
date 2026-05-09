@@ -41,6 +41,7 @@ export interface ChatMessage {
   senderName: string;
   message: string;
   round: number;
+  targetId?: string;
 }
 
 export interface ExecutionResult {
