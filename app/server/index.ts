@@ -115,7 +115,27 @@ io.on('connection', (socket) => {
     broadcastLobbyState(room);
   });
 
-  socket.on('startGame', (settings?: Partial<{ hasSeer: boolean; hasBodyguard: boolean; hasHunter: boolean; hasWitch: boolean; hasAlphaWolf: boolean; hasSorcerer: boolean; hasMinion: boolean; nightTimerSeconds: number; discussionTimerSeconds: number }>) => {
+  socket.on('startGame', (settings?: Partial<{
+    hasSeer: boolean;
+    hasBodyguard: boolean;
+    hasHunter: boolean;
+    hasWitch: boolean;
+    hasAlphaWolf: boolean;
+    hasSorcerer: boolean;
+    hasMinion: boolean;
+    hasMedium: boolean;
+    hasMayor: boolean;
+    hasVigilante: boolean;
+    hasDoctor: boolean;
+    hasSheriff: boolean;
+    hasGravedigger: boolean;
+    hasMysticWolf: boolean;
+    hasWolfCub: boolean;
+    hasLycan: boolean;
+    hasPrince: boolean;
+    nightTimerSeconds: number;
+    discussionTimerSeconds: number;
+  }>) => {
     const roomCode = socketToRoom.get(socket.id);
     if (!roomCode) return;
     const room = rooms.get(roomCode);
@@ -172,8 +192,22 @@ io.on('connection', (socket) => {
         p.faction = 'village';
         p.isAlive = true;
         p.nightAction = null;
+        p.bodyguardTarget = null;
+        p.witchHealTarget = null;
+        p.witchPoisonTarget = null;
+        p.sorcererTarget = null;
+        p.alphaWolfTarget = null;
+        p.doctorTarget = null;
+        p.vigilanteTarget = null;
+        p.vigilanteUsed = false;
+        p.sheriffTarget = null;
+        p.mediumTarget = null;
+        p.mysticWolfTarget = null;
+        p.voteWeight = 1;
+        p.princeSurvived = false;
         p.vote = null;
         p.ready = false;
+        p.skipVoted = false;
       });
       broadcastLobbyState(room);
       return;
@@ -188,6 +222,8 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
 
     const allIn = room.submitNightAction(playerId, targetId);
     if (allIn || room.allNightActionsIn()) {
@@ -202,6 +238,8 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
 
     room.submitBodyguardAction(playerId, targetId);
     if (room.allNightActionsIn()) {
@@ -216,6 +254,8 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
 
     room.submitWitchAction(playerId, healTarget, poisonTarget);
     if (room.allNightActionsIn()) {
@@ -230,6 +270,8 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
 
     room.submitSorcererAction(playerId, targetId);
     if (room.allNightActionsIn()) {
@@ -244,8 +286,90 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
 
     room.submitAlphaWolfAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('doctorAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
+
+    room.submitDoctorAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('vigilanteAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
+
+    room.submitVigilanteAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('sheriffAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
+
+    room.submitSheriffAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('mediumAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
+
+    room.submitMediumAction(playerId, targetId);
+    if (room.allNightActionsIn()) {
+      room.processNight();
+    }
+    broadcastRoomState(room);
+  });
+
+  socket.on('mysticWolfAction', (targetId: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
+
+    room.submitMysticWolfAction(playerId, targetId);
     if (room.allNightActionsIn()) {
       room.processNight();
     }
@@ -270,6 +394,8 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
 
     room.submitSkipVote(playerId);
     if (room.shouldSkipToVote()) {
@@ -285,6 +411,8 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
 
     room.submitVote(playerId, targetId);
 
@@ -302,9 +430,38 @@ io.on('connection', (socket) => {
     if (!room) return;
 
     const player = room.players.find(p => p.id === playerId);
-    if (!player) return;
+    if (!player || !player.isAlive) return;
 
     room.addChat(playerId, player.name, message);
+    broadcastRoomState(room);
+  });
+
+  socket.on('deadChat', (message: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    const player = room.players.find(p => p.id === playerId);
+    if (!player) return;
+    if (player.isAlive && player.role !== 'medium') return;
+
+    room.addDeadChat(playerId, player.name, message);
+    broadcastRoomState(room);
+  });
+
+  socket.on('whisper', (message: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+
+    const player = room.players.find(p => p.id === playerId);
+    if (!player || !player.isAlive) return;
+
+    room.addWhisper(playerId, player.name, message);
     broadcastRoomState(room);
   });
 

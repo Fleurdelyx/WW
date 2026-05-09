@@ -1,7 +1,7 @@
 import { motion, useAnimation } from 'framer-motion';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Role } from '@/types/game';
-import { Shield, Eye, Skull, Sword, Crosshair, FlaskConical, Crown, Wand2, VenetianMask } from 'lucide-react';
+import { Shield, Eye, Skull, Sword, Crosshair, FlaskConical, Crown, Wand2, VenetianMask, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem } from 'lucide-react';
 
 interface WheelSegment {
   role: Role;
@@ -17,18 +17,28 @@ const SEGMENTS: WheelSegment[] = [
   { role: 'bodyguard', label: 'Bodyguard', color: '#22d3ee', darkColor: '#164e63', icon: Sword },
   { role: 'hunter', label: 'Hunter', color: '#fb923c', darkColor: '#7c2d12', icon: Crosshair },
   { role: 'witch', label: 'Witch', color: '#34d399', darkColor: '#064e3b', icon: FlaskConical },
+  { role: 'medium', label: 'Medium', color: '#8b5cf6', darkColor: '#3b2164', icon: Ghost },
+  { role: 'mayor', label: 'Mayor', color: '#fbbf24', darkColor: '#78350f', icon: Vote },
+  { role: 'vigilante', label: 'Vigilante', color: '#f97316', darkColor: '#7c2d12', icon: Swords },
+  { role: 'doctor', label: 'Doctor', color: '#2dd4bf', darkColor: '#134e4a', icon: HeartPulse },
+  { role: 'sheriff', label: 'Sheriff', color: '#38bdf8', darkColor: '#0c4a6e', icon: Search },
+  { role: 'gravedigger', label: 'Gravedigger', color: '#a8a29e', darkColor: '#44403c', icon: Archive },
+  { role: 'lycan', label: 'Lycan', color: '#f59e0b', darkColor: '#78350f', icon: Eclipse },
+  { role: 'prince', label: 'Prince', color: '#60a5fa', darkColor: '#1e3a5f', icon: Gem },
   { role: 'werewolf', label: 'Werewolf', color: '#ef4444', darkColor: '#450a0a', icon: Skull },
   { role: 'alphaWolf', label: 'Alpha', color: '#dc2626', darkColor: '#450a0a', icon: Crown },
   { role: 'sorcerer', label: 'Sorcerer', color: '#818cf8', darkColor: '#312e81', icon: Wand2 },
   { role: 'minion', label: 'Minion', color: '#f472b6', darkColor: '#831843', icon: VenetianMask },
+  { role: 'mysticWolf', label: 'Mystic', color: '#e879f9', darkColor: '#701a75', icon: ScanEye },
+  { role: 'wolfCub', label: 'Cub', color: '#fb7185', darkColor: '#881337', icon: Bone },
 ];
 
-const WHEEL_SIZE = 380;
+const WHEEL_SIZE = 420;
 const CENTER = WHEEL_SIZE / 2;
-const RADIUS = 170;
-const INNER_RADIUS = 55;
-const ICON_RADIUS = 122;
-const LABEL_RADIUS = 88;
+const RADIUS = 195;
+const INNER_RADIUS = 60;
+const ICON_RADIUS = 138;
+const LABEL_RADIUS = 98;
 
 function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   const angleRad = (angleDeg - 90) * Math.PI / 180;
@@ -184,7 +194,7 @@ export default function SpinningWheel({ targetRole, onComplete, spinning = false
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill={isTarget ? '#fff' : 'rgba(255,255,255,0.45)'}
-                  fontSize="10"
+                  fontSize="9"
                   fontWeight={isTarget ? '700' : '500'}
                   style={{ textShadow: isTarget ? `0 0 10px ${seg.color}` : 'none' }}
                 >

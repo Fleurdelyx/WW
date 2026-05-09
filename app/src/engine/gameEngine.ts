@@ -8,6 +8,16 @@ export function assignRoles(playerCount: number, werewolfCount: number, settings
   hasAlphaWolf: boolean;
   hasSorcerer: boolean;
   hasMinion: boolean;
+  hasMedium: boolean;
+  hasMayor: boolean;
+  hasVigilante: boolean;
+  hasDoctor: boolean;
+  hasSheriff: boolean;
+  hasGravedigger: boolean;
+  hasMysticWolf: boolean;
+  hasWolfCub: boolean;
+  hasLycan: boolean;
+  hasPrince: boolean;
 }): Role[] {
   const roles: Role[] = [];
 
@@ -16,6 +26,8 @@ export function assignRoles(playerCount: number, werewolfCount: number, settings
   if (settings.hasAlphaWolf) wolfRoles.push('alphaWolf');
   if (settings.hasSorcerer) wolfRoles.push('sorcerer');
   if (settings.hasMinion) wolfRoles.push('minion');
+  if (settings.hasMysticWolf) wolfRoles.push('mysticWolf');
+  if (settings.hasWolfCub) wolfRoles.push('wolfCub');
 
   // Fill remaining werewolf slots with regular werewolves
   while (wolfRoles.length < werewolfCount) wolfRoles.push('werewolf');
@@ -29,6 +41,14 @@ export function assignRoles(playerCount: number, werewolfCount: number, settings
   if (settings.hasBodyguard) roles.push('bodyguard');
   if (settings.hasHunter) roles.push('hunter');
   if (settings.hasWitch) roles.push('witch');
+  if (settings.hasMedium) roles.push('medium');
+  if (settings.hasMayor) roles.push('mayor');
+  if (settings.hasVigilante) roles.push('vigilante');
+  if (settings.hasDoctor) roles.push('doctor');
+  if (settings.hasSheriff) roles.push('sheriff');
+  if (settings.hasGravedigger) roles.push('gravedigger');
+  if (settings.hasLycan) roles.push('lycan');
+  if (settings.hasPrince) roles.push('prince');
 
   // Fill with villagers
   while (roles.length < playerCount) roles.push('villager');
@@ -43,13 +63,14 @@ export function assignRoles(playerCount: number, werewolfCount: number, settings
 
 export function getFaction(role: Role): Faction {
   if (role === 'unknown') return 'unknown';
-  if (role === 'minion') return 'village'; // Minion appears as village to Seer
-  return (role === 'werewolf' || role === 'alphaWolf' || role === 'sorcerer') ? 'werewolf' : 'village';
+  if (role === 'minion') return 'village'; // Minion appears as village
+  if (role === 'lycan') return 'werewolf'; // Lycan appears as werewolf to Seer
+  return (role === 'werewolf' || role === 'alphaWolf' || role === 'sorcerer' || role === 'mysticWolf' || role === 'wolfCub') ? 'werewolf' : 'village';
 }
 
 export function getTrueFaction(role: Role): Faction {
   if (role === 'unknown') return 'unknown';
-  return (role === 'werewolf' || role === 'alphaWolf' || role === 'sorcerer' || role === 'minion') ? 'werewolf' : 'village';
+  return (role === 'werewolf' || role === 'alphaWolf' || role === 'sorcerer' || role === 'minion' || role === 'mysticWolf' || role === 'wolfCub') ? 'werewolf' : 'village';
 }
 
 export function getRoleName(role: Role): string {
@@ -63,6 +84,16 @@ export function getRoleName(role: Role): string {
     alphaWolf: 'Alpha Wolf',
     sorcerer: 'Sorcerer',
     minion: 'Minion',
+    medium: 'Medium',
+    mayor: 'Mayor',
+    vigilante: 'Vigilante',
+    doctor: 'Doctor',
+    sheriff: 'Sheriff',
+    gravedigger: 'Gravedigger',
+    mysticWolf: 'Mystic Wolf',
+    wolfCub: 'Wolf Cub',
+    lycan: 'Lycan',
+    prince: 'Prince',
     unknown: 'Unknown',
   };
   return names[role];
@@ -79,17 +110,54 @@ export function getRoleDescription(role: Role): string {
     alphaWolf: 'You are the Alpha Wolf. Your night target choice overrides all other werewolves. Lead the pack.',
     sorcerer: 'You are the Sorcerer. Each night, investigate one player to find the Seer. Serve the wolf pack.',
     minion: 'You are the Minion. You appear as a Villager but win with the Werewolves. You know who they are.',
+    medium: 'You are the Medium. You can see the Dead Chat and commune with spirits each night to learn a dead player\'s role.',
+    mayor: 'You are the Mayor. Your vote counts as two votes during the day. Lead the village wisely.',
+    vigilante: 'You are the Vigilante. You have one bullet. Choose wisely who to shoot at night.',
+    doctor: 'You are the Doctor. Each night, heal one player to prevent any death that befalls them.',
+    sheriff: 'You are the Sheriff. Each night, investigate one player to learn their exact role.',
+    gravedigger: 'You are the Gravedigger. Each dawn, you automatically learn the exact role of the most recent victim.',
+    mysticWolf: 'You are the Mystic Wolf. Each night, you may investigate one player like the Seer. Deceive and destroy.',
+    wolfCub: 'You are the Wolf Cub. You hunt with the pack. If the Alpha Wolf dies, you grow stronger.',
+    lycan: 'You are the Lycan. You are a Villager, but you appear as a Werewolf to investigators. Prove your innocence.',
+    prince: 'You are the Prince. The first time you would be voted out, you reveal yourself and survive.',
     unknown: 'Role hidden.',
   };
   return descriptions[role];
 }
 
-export function tallyVotes(votes: Record<string, string>, players: Player[]): { eliminated: Player | null; voteCounts: Record<string, number> } {
+export function getRoleTooltip(role: Role): string {
+  const tooltips: Record<Role, string> = {
+    villager: 'No special ability. Vote during the day to find werewolves.',
+    werewolf: 'Night: Vote with other werewolves on who to kill. Day: Blend in and deceive.',
+    seer: 'Night: Choose a player to investigate. You will see if they are village or werewolf aligned.',
+    bodyguard: 'Night: Choose a player to protect. If werewolves target them, they survive.',
+    hunter: 'Night: No action. If you are eliminated, you automatically kill someone in revenge.',
+    witch: 'Night: Use your healing potion (once) to save someone, or poison potion (once) to kill.',
+    alphaWolf: 'Night: Your kill target choice OVERRIDES all other werewolves. You are the pack leader.',
+    sorcerer: 'Night: Investigate a player. You will know if they are the Seer. You are on the werewolf team.',
+    minion: 'No night action. You know who the werewolves are and win with them. You appear as village to the Seer.',
+    medium: 'You can see Dead Chat at all times. Night: Commune with a dead player to learn their exact role.',
+    mayor: 'No night action. During voting, your vote counts as TWO votes. You cannot be hidden.',
+    vigilante: 'Night: Choose a player to shoot. You only have ONE bullet for the entire game.',
+    doctor: 'Night: Choose a player to heal. They will survive ANY death that night (werewolf, poison, vigilante).',
+    sheriff: 'Night: Investigate a player to learn their EXACT role (not just faction).',
+    gravedigger: 'No night action. Each dawn, you automatically learn the exact role of whoever died last.',
+    mysticWolf: 'Night: Investigate a player to see their faction (like the Seer). You are on the werewolf team.',
+    wolfCub: 'Night: Vote with the pack on who to kill. A basic werewolf with no special power.',
+    lycan: 'No special ability. You appear as a Werewolf to the Seer and Sheriff, but you are village-aligned.',
+    prince: 'No night action. The FIRST time you would be eliminated by voting, you survive and are revealed.',
+    unknown: 'This player\'s role is hidden.',
+  };
+  return tooltips[role];
+}
+
+export function tallyVotes(votes: Record<string, string>, players: Player[], mayorId?: string | null): { eliminated: Player | null; voteCounts: Record<string, number> } {
   const alivePlayers = players.filter(p => p.isAlive);
   const counts: Record<string, number> = {};
   alivePlayers.forEach(p => counts[p.id] = 0);
-  Object.values(votes).forEach(targetId => {
-    if (counts[targetId] !== undefined) counts[targetId]++;
+  Object.entries(votes).forEach(([voterId, targetId]) => {
+    const weight = voterId === mayorId ? 2 : 1;
+    if (counts[targetId] !== undefined) counts[targetId] += weight;
   });
 
   let maxVotes = 0;
@@ -151,7 +219,7 @@ export function aiNightAction(player: Player, players: Player[], difficulty: AiD
   const aliveOthers = players.filter(p => p.id !== player.id && p.isAlive);
   if (aliveOthers.length === 0) return null;
 
-  if (player.role === 'werewolf' || player.role === 'alphaWolf') {
+  if (player.role === 'werewolf' || player.role === 'alphaWolf' || player.role === 'wolfCub') {
     const villagers = aliveOthers.filter(p => getTrueFaction(p.role) !== 'werewolf');
     if (villagers.length === 0) return aliveOthers[Math.floor(Math.random() * aliveOthers.length)].id;
 
@@ -170,7 +238,7 @@ export function aiNightAction(player: Player, players: Player[], difficulty: AiD
     }
   }
 
-  if (player.role === 'seer') {
+  if (player.role === 'seer' || player.role === 'mysticWolf') {
     const unchecked = aliveOthers.filter(p => p.id !== player.id);
     if (unchecked.length === 0) return null;
     if (difficulty === 'hard') {
@@ -180,7 +248,6 @@ export function aiNightAction(player: Player, players: Player[], difficulty: AiD
   }
 
   if (player.role === 'sorcerer') {
-    // Try to find the seer
     const seerTargets = aliveOthers.filter(p => p.role === 'seer');
     if (seerTargets.length > 0 && difficulty !== 'easy') {
       return seerTargets[Math.floor(Math.random() * seerTargets.length)].id;
@@ -202,7 +269,31 @@ export function aiNightAction(player: Player, players: Player[], difficulty: AiD
     return aliveOthers[Math.floor(Math.random() * aliveOthers.length)].id;
   }
 
-  return null; // Villager, Hunter, Minion have no night action
+  if (player.role === 'doctor') {
+    const villageAligned = aliveOthers.filter(p => getTrueFaction(p.role) !== 'werewolf');
+    if (villageAligned.length === 0) return aliveOthers[Math.floor(Math.random() * aliveOthers.length)].id;
+    return villageAligned[Math.floor(Math.random() * villageAligned.length)].id;
+  }
+
+  if (player.role === 'vigilante') {
+    const nonVillagers = aliveOthers.filter(p => getTrueFaction(p.role) === 'werewolf');
+    if (difficulty !== 'easy' && nonVillagers.length > 0 && Math.random() < 0.6) {
+      return nonVillagers[Math.floor(Math.random() * nonVillagers.length)].id;
+    }
+    return aliveOthers[Math.floor(Math.random() * aliveOthers.length)].id;
+  }
+
+  if (player.role === 'sheriff') {
+    return aliveOthers[Math.floor(Math.random() * aliveOthers.length)].id;
+  }
+
+  if (player.role === 'medium') {
+    const deadPlayers = players.filter(p => !p.isAlive);
+    if (deadPlayers.length === 0) return null;
+    return deadPlayers[Math.floor(Math.random() * deadPlayers.length)].id;
+  }
+
+  return null; // Villager, Hunter, Minion, Mayor, Gravedigger, Lycan, Prince have no night action
 }
 
 export function aiDayVote(player: Player, players: Player[], logs: string[], difficulty: AiDifficulty): string {
@@ -212,7 +303,6 @@ export function aiDayVote(player: Player, players: Player[], logs: string[], dif
   const trueFaction = getTrueFaction(player.role);
 
   if (trueFaction === 'werewolf') {
-    // Werewolf team votes for villagers
     const villagers = aliveOthers.filter(p => getTrueFaction(p.role) !== 'werewolf');
     if (villagers.length === 0) return aliveOthers[0].id;
 
@@ -224,7 +314,7 @@ export function aiDayVote(player: Player, players: Player[], logs: string[], dif
   }
 
   // Villager team: try to vote for werewolves
-  if (difficulty === 'hard' && player.role === 'seer') {
+  if (difficulty === 'hard' && (player.role === 'seer' || player.role === 'sheriff')) {
     const suspectedWerewolves = aliveOthers.filter(p => getTrueFaction(p.role) === 'werewolf');
     if (suspectedWerewolves.length > 0) return suspectedWerewolves[0].id;
   }
@@ -294,7 +384,7 @@ export function generateAiChat(player: Player, players: Player[], round: number)
 
   if (getTrueFaction(player.role) === 'werewolf') {
     template = pickRandom(WEREWOLF_CHAT_RESPONSES);
-  } else if (player.role === 'seer') {
+  } else if (player.role === 'seer' || player.role === 'sheriff') {
     template = pickRandom(SEER_CHAT_RESPONSES);
   } else {
     template = pickRandom(VILLAGER_CHAT_RESPONSES);

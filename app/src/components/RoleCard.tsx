@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import type { Role } from '@/types/game';
-import { Shield, Eye, Skull, Sword, Crosshair, FlaskConical, Sparkles, Crown, Wand2, VenetianMask } from 'lucide-react';
+import { Shield, Eye, Skull, Sword, Crosshair, FlaskConical, Sparkles, Crown, Wand2, VenetianMask, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem } from 'lucide-react';
 
 interface RoleCardProps {
   role: Role;
@@ -119,6 +119,116 @@ const roleConfig: Record<string, {
     factionColor: 'text-pink-400',
     pattern: 'radial-gradient(circle at 30% 60%, rgba(244,114,182,0.2) 0%, transparent 50%)',
   },
+  medium: {
+    name: 'Medium',
+    icon: Ghost,
+    gradient: 'from-indigo-900/80 via-violet-800/60 to-slate-900/80',
+    border: 'border-violet-400/50',
+    text: 'text-violet-300',
+    accent: 'bg-violet-400',
+    faction: 'Village',
+    factionColor: 'text-violet-400',
+    pattern: 'radial-gradient(circle at 50% 30%, rgba(139,92,246,0.2) 0%, transparent 50%)',
+  },
+  mayor: {
+    name: 'Mayor',
+    icon: Vote,
+    gradient: 'from-amber-900/80 via-yellow-800/60 to-slate-900/80',
+    border: 'border-amber-400/50',
+    text: 'text-amber-300',
+    accent: 'bg-amber-400',
+    faction: 'Village',
+    factionColor: 'text-amber-400',
+    pattern: 'radial-gradient(circle at 50% 20%, rgba(251,191,36,0.2) 0%, transparent 50%)',
+  },
+  vigilante: {
+    name: 'Vigilante',
+    icon: Swords,
+    gradient: 'from-red-900/80 via-orange-800/60 to-slate-900/80',
+    border: 'border-orange-500/50',
+    text: 'text-orange-300',
+    accent: 'bg-orange-500',
+    faction: 'Village',
+    factionColor: 'text-orange-400',
+    pattern: 'radial-gradient(circle at 70% 50%, rgba(249,115,22,0.2) 0%, transparent 50%)',
+  },
+  doctor: {
+    name: 'Doctor',
+    icon: HeartPulse,
+    gradient: 'from-teal-900/80 via-emerald-800/60 to-slate-900/80',
+    border: 'border-teal-400/50',
+    text: 'text-teal-300',
+    accent: 'bg-teal-400',
+    faction: 'Village',
+    factionColor: 'text-teal-400',
+    pattern: 'radial-gradient(circle at 30% 70%, rgba(45,212,191,0.2) 0%, transparent 50%)',
+  },
+  sheriff: {
+    name: 'Sheriff',
+    icon: Search,
+    gradient: 'from-sky-900/80 via-blue-800/60 to-slate-900/80',
+    border: 'border-sky-400/50',
+    text: 'text-sky-300',
+    accent: 'bg-sky-400',
+    faction: 'Village',
+    factionColor: 'text-sky-400',
+    pattern: 'radial-gradient(circle at 60% 30%, rgba(56,189,248,0.2) 0%, transparent 50%)',
+  },
+  gravedigger: {
+    name: 'Gravedigger',
+    icon: Archive,
+    gradient: 'from-stone-900/80 via-neutral-800/60 to-slate-900/80',
+    border: 'border-stone-400/50',
+    text: 'text-stone-300',
+    accent: 'bg-stone-400',
+    faction: 'Village',
+    factionColor: 'text-stone-400',
+    pattern: 'radial-gradient(circle at 40% 60%, rgba(168,162,158,0.15) 0%, transparent 50%)',
+  },
+  mysticWolf: {
+    name: 'Mystic Wolf',
+    icon: ScanEye,
+    gradient: 'from-fuchsia-950/90 via-purple-900/70 to-slate-900/80',
+    border: 'border-fuchsia-400/50',
+    text: 'text-fuchsia-300',
+    accent: 'bg-fuchsia-500',
+    faction: 'Werewolf',
+    factionColor: 'text-fuchsia-400',
+    pattern: 'radial-gradient(circle at 50% 40%, rgba(232,121,249,0.25) 0%, transparent 50%)',
+  },
+  wolfCub: {
+    name: 'Wolf Cub',
+    icon: Bone,
+    gradient: 'from-rose-950/90 via-red-900/70 to-slate-900/80',
+    border: 'border-rose-400/50',
+    text: 'text-rose-300',
+    accent: 'bg-rose-500',
+    faction: 'Werewolf',
+    factionColor: 'text-rose-400',
+    pattern: 'radial-gradient(circle at 60% 60%, rgba(251,113,133,0.2) 0%, transparent 50%)',
+  },
+  lycan: {
+    name: 'Lycan',
+    icon: Eclipse,
+    gradient: 'from-amber-900/80 via-orange-800/60 to-slate-900/80',
+    border: 'border-amber-500/50',
+    text: 'text-amber-300',
+    accent: 'bg-amber-500',
+    faction: 'Village',
+    factionColor: 'text-amber-400',
+    pattern: 'radial-gradient(circle at 30% 50%, rgba(245,158,11,0.2) 0%, transparent 50%)',
+  },
+  prince: {
+    name: 'Prince',
+    icon: Gem,
+    gradient: 'from-blue-950/80 via-indigo-800/60 to-slate-900/80',
+    border: 'border-blue-400/50',
+    text: 'text-blue-300',
+    accent: 'bg-blue-400',
+    faction: 'Village',
+    factionColor: 'text-blue-400',
+    pattern: 'radial-gradient(circle at 50% 30%, rgba(96,165,250,0.2) 0%, transparent 50%)',
+  },
   unknown: {
     name: 'Unknown',
     icon: Sparkles,
@@ -143,6 +253,9 @@ export default function RoleCard({ role, size = 'md', revealed = true, animate =
   };
 
   const s = sizeClasses[size];
+
+  const isEvil = role === 'werewolf' || role === 'alphaWolf' || role === 'sorcerer' || role === 'minion' || role === 'mysticWolf' || role === 'wolfCub';
+  const isVillage = role === 'villager' || role === 'seer' || role === 'bodyguard' || role === 'hunter' || role === 'witch' || role === 'medium' || role === 'mayor' || role === 'vigilante' || role === 'doctor' || role === 'sheriff' || role === 'gravedigger' || role === 'lycan' || role === 'prince';
 
   return (
     <motion.div
@@ -207,16 +320,16 @@ export default function RoleCard({ role, size = 'md', revealed = true, animate =
           <h3 className={`font-cinzel font-bold ${config.text} ${s.title} tracking-wider`}>
             {config.name.toUpperCase()}
           </h3>
-          {(role === 'werewolf' || role === 'alphaWolf' || role === 'sorcerer' || role === 'minion') && (
+          {isEvil && (
             <motion.p
               className="text-red-400/60 text-xs mt-1 tracking-widest uppercase"
               animate={{ opacity: [0.4, 0.8, 0.4] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              {role === 'alphaWolf' ? 'Command · Kill · Dominate' : role === 'sorcerer' ? 'Seek · Spy · Serve' : role === 'minion' ? 'Deceive · Aid · Survive' : 'Deceive · Kill · Survive'}
+              {role === 'alphaWolf' ? 'Command · Kill · Dominate' : role === 'sorcerer' ? 'Seek · Spy · Serve' : role === 'minion' ? 'Deceive · Aid · Survive' : role === 'mysticWolf' ? 'Seek · Spy · Destroy' : role === 'wolfCub' ? 'Hunt · Grow · Survive' : 'Deceive · Kill · Survive'}
             </motion.p>
           )}
-          {(role === 'villager' || role === 'seer' || role === 'bodyguard' || role === 'hunter' || role === 'witch') && (
+          {isVillage && (
             <motion.p
               className={`${config.factionColor} opacity-60 text-xs mt-1 tracking-widest uppercase`}
               animate={{ opacity: [0.3, 0.6, 0.3] }}

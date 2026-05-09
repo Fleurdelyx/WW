@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
-import { Users, Crown, Play, ArrowLeft, Copy, Check, Eye, Shield, Crosshair, FlaskConical, Clock, MessageCircle, Settings2, Sparkles, Wifi, Wand2, VenetianMask, Skull } from 'lucide-react';
+import { Users, Crown, Play, ArrowLeft, Copy, Check, Eye, Shield, Crosshair, FlaskConical, Clock, MessageCircle, Settings2, Sparkles, Wifi, Wand2, VenetianMask, Skull, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem } from 'lucide-react';
 import { useState } from 'react';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import ParticleBackground from '@/components/ParticleBackground';
@@ -241,12 +241,22 @@ export default function RoomScreen() {
                       <RoleToggle icon={<Shield className="w-3 h-3" />} title="Bodyguard" active={settings.hasBodyguard} onToggle={() => updateSettings({ hasBodyguard: !settings.hasBodyguard })} />
                       <RoleToggle icon={<Crosshair className="w-3 h-3" />} title="Hunter" active={settings.hasHunter} onToggle={() => updateSettings({ hasHunter: !settings.hasHunter })} />
                       <RoleToggle icon={<FlaskConical className="w-3 h-3" />} title="Witch" active={settings.hasWitch} onToggle={() => updateSettings({ hasWitch: !settings.hasWitch })} />
+                      <RoleToggle icon={<Ghost className="w-3 h-3" />} title="Medium" active={settings.hasMedium} onToggle={() => updateSettings({ hasMedium: !settings.hasMedium })} />
+                      <RoleToggle icon={<Vote className="w-3 h-3" />} title="Mayor" active={settings.hasMayor} onToggle={() => updateSettings({ hasMayor: !settings.hasMayor })} />
+                      <RoleToggle icon={<Swords className="w-3 h-3" />} title="Vigilante" active={settings.hasVigilante} onToggle={() => updateSettings({ hasVigilante: !settings.hasVigilante })} />
+                      <RoleToggle icon={<HeartPulse className="w-3 h-3" />} title="Doctor" active={settings.hasDoctor} onToggle={() => updateSettings({ hasDoctor: !settings.hasDoctor })} />
+                      <RoleToggle icon={<Search className="w-3 h-3" />} title="Sheriff" active={settings.hasSheriff} onToggle={() => updateSettings({ hasSheriff: !settings.hasSheriff })} />
+                      <RoleToggle icon={<Archive className="w-3 h-3" />} title="Gravedigger" active={settings.hasGravedigger} onToggle={() => updateSettings({ hasGravedigger: !settings.hasGravedigger })} />
+                      <RoleToggle icon={<Eclipse className="w-3 h-3" />} title="Lycan" active={settings.hasLycan} onToggle={() => updateSettings({ hasLycan: !settings.hasLycan })} />
+                      <RoleToggle icon={<Gem className="w-3 h-3" />} title="Prince" active={settings.hasPrince} onToggle={() => updateSettings({ hasPrince: !settings.hasPrince })} />
                     </div>
                     <div className="space-y-2 mt-3">
                       <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Wolf Pack</p>
                       <RoleToggle icon={<Crown className="w-3 h-3" />} title="Alpha Wolf" active={settings.hasAlphaWolf} onToggle={() => updateSettings({ hasAlphaWolf: !settings.hasAlphaWolf })} />
                       <RoleToggle icon={<Wand2 className="w-3 h-3" />} title="Sorcerer" active={settings.hasSorcerer} onToggle={() => updateSettings({ hasSorcerer: !settings.hasSorcerer })} />
                       <RoleToggle icon={<VenetianMask className="w-3 h-3" />} title="Minion" active={settings.hasMinion} onToggle={() => updateSettings({ hasMinion: !settings.hasMinion })} />
+                      <RoleToggle icon={<ScanEye className="w-3 h-3" />} title="Mystic Wolf" active={settings.hasMysticWolf} onToggle={() => updateSettings({ hasMysticWolf: !settings.hasMysticWolf })} />
+                      <RoleToggle icon={<Bone className="w-3 h-3" />} title="Wolf Cub" active={settings.hasWolfCub} onToggle={() => updateSettings({ hasWolfCub: !settings.hasWolfCub })} />
                     </div>
                   </motion.div>
                 )}

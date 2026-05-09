@@ -1,17 +1,31 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import { useState, useRef, useEffect } from 'react';
-import { Sun, Users, MessageSquare, Vote, Skull, Send, Clock, FastForward, Zap, Flame, User } from 'lucide-react';
+import { Sun, Users, MessageSquare, Vote, Skull, Send, Clock, FastForward, Zap, Flame, User, Crown, MessageCircle } from 'lucide-react';
 import type { Player } from '@/types/game';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import CountdownRing from '@/components/CountdownRing';
 import AnimatedPlayerCard from '@/components/AnimatedPlayerCard';
 import ParticleBackground, { FogLayer } from '@/components/ParticleBackground';
 import { ToastContainer, useToasts } from '@/components/ToastNotification';
-import { getTrueFaction } from '@/engine/gameEngine';
+import { getTrueFaction, getRoleTooltip } from '@/engine/gameEngine';
 
-function ChatBubble({ msg, humanId }: { msg: { senderId: string; senderName: string; message: string }; humanId: string }) {
+function ChatBubble({ msg, humanId, isWhisper }: { msg: { senderId: string; senderName: string; message: string }; humanId: string; isWhisper?: boolean }) {
   const isMe = msg.senderId === humanId;
+  if (isWhisper) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        className="flex justify-center"
+      >
+        <div className="max-w-[80%] px-3 py-1.5 rounded-2xl text-xs italic text-text-muted/60 bg-bg-elevated/30 border border-accent-purple/10 rounded-br-md rounded-bl-md">
+          <span className="font-bold">Whisper from {msg.senderName}:</span> {msg.message}
+        </div>
+      </motion.div>
+    );
+  }
   return (
     <motion.div
       initial={{ opacity: 0, x: isMe ? 30 : -30, scale: 0.9 }}
@@ -32,11 +46,14 @@ function ChatBubble({ msg, humanId }: { msg: { senderId: string; senderName: str
 }
 
 export default function DayScreen() {
-  const { state, castVote, sendChat, startVoting, voteSkipDiscussion, aiAutoChat } = useGameStore();
-  const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost, settings, skipVotes } = state;
+  const { state, castVote, sendChat, startVoting, voteSkipDiscussion, aiAutoChat, sendWhisper, sendDeadChat } = useGameStore();
+  const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost, settings, skipVotes, deadChatMessages, whispers } = state;
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [localPhase, setLocalPhase] = useState<'discussion' | 'voting'>('discussion');
   const [chatInput, setChatInput] = useState('');
+  const [showDeadChat, setShowDeadChat] = useState(false);
+  const [whisperTarget, setWhisperTarget] = useState<string | null>(null);
+  const [whisperInput, setWhisperInput] = useState('');
   const [discussionTimer, setDiscussionTimer] = useState(settings.discussionTimerSeconds);
   const [tensionShake, setTensionShake] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -53,6 +70,8 @@ export default function DayScreen() {
   const wolfCount = state.aliveWerewolfCount ?? alivePlayers.filter(p => getTrueFaction(p.role) === 'werewolf').length;
 
   const prevVoteCounts = executionResult?.voteCounts || {};
+
+  const canSeeDeadChat = !human?.isAlive || human?.role === 'medium';
 
   // Tension shake effect during voting
   useEffect(() => {
@@ -88,6 +107,10 @@ export default function DayScreen() {
   }, [round, settings.discussionTimerSeconds]);
 
   const handleVote = () => {
+    if (!human?.isAlive) {
+      addToast('You are dead. You cannot vote.', 'system');
+      return;
+    }
     if (selectedTarget) {
       const targetName = players.find(p => p.id === selectedTarget)?.name;
       addToast(`You voted to eliminate ${targetName}`, 'vote');
@@ -106,8 +129,21 @@ export default function DayScreen() {
 
   const handleSendChat = () => {
     if (chatInput.trim()) {
-      sendChat(chatInput.trim());
+      if (showDeadChat && canSeeDeadChat) {
+        sendDeadChat(chatInput.trim());
+      } else {
+        sendChat(chatInput.trim());
+      }
       setChatInput('');
+    }
+  };
+
+  const handleSendWhisper = () => {
+    if (whisperInput.trim() && whisperTarget) {
+      sendWhisper(whisperTarget, whisperInput.trim());
+      setWhisperInput('');
+      setWhisperTarget(null);
+      addToast(`Whisper sent to ${players.find(p => p.id === whisperTarget)?.name}`, 'system');
     }
   };
 
@@ -118,6 +154,8 @@ export default function DayScreen() {
 
   const relevantLogs = logs.filter(l => (l.round === round || l.type === 'death') && l.type !== 'chat');
   const currentChat = (chatMessages || []).filter(m => m.round === round);
+  const currentDeadChat = (deadChatMessages || []).filter(m => m.round === round);
+  const currentWhispers = (whispers || []).filter(m => m.round === round);
 
   const skipCount = Object.keys(skipVotes).length;
   const majority = Math.floor(aliveCount / 2) + 1;
@@ -125,7 +163,7 @@ export default function DayScreen() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs, chatMessages, round]);
+  }, [logs, chatMessages, deadChatMessages, whispers, round, showDeadChat]);
 
   useEffect(() => {
     if (!isOnline && phase === 'discussion' && skipCount >= majority) {
@@ -154,6 +192,16 @@ export default function DayScreen() {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const getPlayerTooltip = (player: Player) => {
+    if (player.id === humanPlayerId) return getRoleTooltip(player.role);
+    if (!player.isAlive) return getRoleTooltip(player.role);
+    return getRoleTooltip('unknown');
+  };
+
+  const isRoleRevealed = (player: Player) => {
+    return player.id === humanPlayerId || !player.isAlive;
   };
 
   return (
@@ -260,21 +308,77 @@ export default function DayScreen() {
         <motion.div className="grid grid-cols-3 sm:grid-cols-4 gap-3" layout>
           <AnimatePresence mode="popLayout">
             {players.map((player, i) => (
-              <AnimatedPlayerCard
-                key={player.id}
-                player={player}
-                isSelected={phase === 'voting' && selectedTarget === player.id}
-                onClick={() => {
-                  if (phase === 'voting' && player.isAlive && player.id !== humanPlayerId) {
-                    setSelectedTarget(player.id);
-                  }
-                }}
-                voteCount={prevVoteCounts[player.id] || 0}
-                index={i}
-              />
+              <div key={player.id} className="relative">
+                <AnimatedPlayerCard
+                  player={player}
+                  isSelected={phase === 'voting' && selectedTarget === player.id}
+                  onClick={() => {
+                    if (phase === 'voting' && player.isAlive && player.id !== humanPlayerId && human?.isAlive) {
+                      setSelectedTarget(player.id);
+                    }
+                  }}
+                  voteCount={prevVoteCounts[player.id] || 0}
+                  index={i}
+                  tooltip={getPlayerTooltip(player)}
+                  isMayor={player.role === 'mayor' && isRoleRevealed(player)}
+                />
+                {phase === 'discussion' && player.isAlive && player.id !== humanPlayerId && human?.isAlive && (
+                  <motion.button
+                    onClick={(e) => { e.stopPropagation(); setWhisperTarget(player.id); }}
+                    className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-accent-purple/80 hover:bg-accent-purple text-white px-1.5 py-0.5 rounded-full z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+                    whileHover={{ scale: 1.1 }}
+                    style={{ opacity: 1 }}
+                  >
+                    Whisper
+                  </motion.button>
+                )}
+              </div>
             ))}
           </AnimatePresence>
         </motion.div>
+
+        {/* Whisper Input */}
+        <AnimatePresence>
+          {whisperTarget && (
+            <motion.div
+              className="bg-bg-secondary border border-accent-purple/30 rounded-xl p-3 flex items-center gap-2 shadow-xl"
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+            >
+              <MessageCircle className="w-4 h-4 text-accent-purple" />
+              <span className="text-xs text-text-muted whitespace-nowrap">
+                To {players.find(p => p.id === whisperTarget)?.name}:
+              </span>
+              <input
+                type="text"
+                value={whisperInput}
+                onChange={e => setWhisperInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendWhisper()}
+                placeholder="Type a private message..."
+                className="flex-1 bg-bg-primary border border-accent-purple/30 rounded-lg px-3 py-1.5 text-text-primary text-sm placeholder:text-text-muted focus:border-accent-purple focus:outline-none"
+                autoFocus
+              />
+              <motion.button
+                onClick={handleSendWhisper}
+                disabled={!whisperInput.trim()}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className="bg-accent-purple hover:bg-accent-purple/80 disabled:bg-bg-elevated disabled:text-text-muted text-white px-3 py-1.5 rounded-lg transition-all text-xs"
+              >
+                Send
+              </motion.button>
+              <motion.button
+                onClick={() => setWhisperTarget(null)}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                className="text-text-muted hover:text-text-primary px-2 py-1.5 text-xs"
+              >
+                ✕
+              </motion.button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Chat / Log Panel */}
         <motion.div
@@ -284,13 +388,40 @@ export default function DayScreen() {
           transition={{ delay: 0.2 }}
         >
           <div className="bg-bg-secondary/60 border border-accent-purple/20 rounded-xl flex flex-col h-64 backdrop-blur-sm overflow-hidden">
+            {/* Chat tabs */}
+            <div className="flex items-center border-b border-accent-purple/20">
+              <button
+                onClick={() => setShowDeadChat(false)}
+                className={`flex-1 text-xs py-2 text-center transition-colors ${!showDeadChat ? 'text-accent-gold bg-accent-purple/10' : 'text-text-muted hover:text-text-primary'}`}
+              >
+                Chat
+              </button>
+              {canSeeDeadChat && (
+                <button
+                  onClick={() => setShowDeadChat(true)}
+                  className={`flex-1 text-xs py-2 text-center transition-colors ${showDeadChat ? 'text-accent-gold bg-accent-purple/10' : 'text-text-muted hover:text-text-primary'}`}
+                >
+                  Dead Chat
+                </button>
+              )}
+            </div>
+
             {/* Messages area */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               <AnimatePresence>
-                {currentChat.map((msg, i) => (
-                  <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
-                ))}
+                {showDeadChat && canSeeDeadChat ? (
+                  currentDeadChat.map((msg) => (
+                    <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
+                  ))
+                ) : (
+                  currentChat.map((msg) => (
+                    <ChatBubble key={msg.id} msg={msg} humanId={humanPlayerId} />
+                  ))
+                )}
               </AnimatePresence>
+              {currentWhispers.map(w => (
+                <ChatBubble key={w.id} msg={w} humanId={humanPlayerId} isWhisper />
+              ))}
               {relevantLogs.slice(-15).map(log => (
                 <motion.div
                   key={log.id}
@@ -325,7 +456,7 @@ export default function DayScreen() {
                     value={chatInput}
                     onChange={e => setChatInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSendChat()}
-                    placeholder="Say something..."
+                    placeholder={showDeadChat && canSeeDeadChat ? "Speak to the dead..." : "Say something..."}
                     className="flex-1 bg-bg-primary border border-accent-purple/30 rounded-lg px-3 py-2 text-text-primary text-sm placeholder:text-text-muted focus:border-accent-purple focus:outline-none"
                     whileFocus={{ scale: 1.01, borderColor: 'rgba(123,109,141,0.8)' }}
                   />
@@ -398,13 +529,18 @@ export default function DayScreen() {
                     </motion.p>
                   )}
                 </AnimatePresence>
+                {!human?.isAlive && (
+                  <motion.p className="text-center text-text-muted text-sm">
+                    You are dead and cannot vote.
+                  </motion.p>
+                )}
                 <motion.button
                   whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(139,58,58,0.5)' }}
                   whileTap={{ scale: 0.97 }}
                   onClick={handleVote}
-                  disabled={!selectedTarget}
+                  disabled={!selectedTarget || !human?.isAlive}
                   className={`w-full py-4 rounded-xl font-bold transition-all text-lg flex items-center justify-center gap-2 ${
-                    selectedTarget
+                    selectedTarget && human?.isAlive
                       ? 'bg-werewolf-red hover:bg-werewolf-red/90 text-white shadow-[0_0_20px_rgba(139,58,58,0.4)]'
                       : 'bg-bg-elevated text-text-muted cursor-not-allowed'
                   }`}

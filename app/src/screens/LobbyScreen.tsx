@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
 import type { AiDifficulty } from '@/types/game';
-import { ArrowLeft, Users, Brain, Eye, Shield, Crosshair, FlaskConical, Play, Clock, MessageCircle, Sparkles, Moon, Crown, Wand2, VenetianMask, Skull } from 'lucide-react';
+import { ArrowLeft, Users, Brain, Eye, Shield, Crosshair, FlaskConical, Play, Clock, MessageCircle, Sparkles, Moon, Crown, Wand2, VenetianMask, Skull, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem, Star } from 'lucide-react';
 import ParticleBackground from '@/components/ParticleBackground';
 
 export default function LobbyScreen() {
@@ -222,6 +222,67 @@ export default function LobbyScreen() {
             </div>
             <div className="mt-4 space-y-2">
               <p className="text-text-secondary text-sm mb-2 flex items-center gap-2">
+                <Star className="w-4 h-4 text-accent-gold" /> More Village Roles
+              </p>
+              <RoleToggle
+                icon={<Ghost className="w-4 h-4" />}
+                title="Include the Medium"
+                desc="Can see dead chat and commune with spirits"
+                active={settings.hasMedium}
+                onToggle={() => updateSettings({ hasMedium: !settings.hasMedium })}
+              />
+              <RoleToggle
+                icon={<Vote className="w-4 h-4" />}
+                title="Include the Mayor"
+                desc="Vote counts as two votes"
+                active={settings.hasMayor}
+                onToggle={() => updateSettings({ hasMayor: !settings.hasMayor })}
+              />
+              <RoleToggle
+                icon={<Swords className="w-4 h-4" />}
+                title="Include the Vigilante"
+                desc="Has one bullet to shoot at night"
+                active={settings.hasVigilante}
+                onToggle={() => updateSettings({ hasVigilante: !settings.hasVigilante })}
+              />
+              <RoleToggle
+                icon={<HeartPulse className="w-4 h-4" />}
+                title="Include the Doctor"
+                desc="Heals one player each night"
+                active={settings.hasDoctor}
+                onToggle={() => updateSettings({ hasDoctor: !settings.hasDoctor })}
+              />
+              <RoleToggle
+                icon={<Search className="w-4 h-4" />}
+                title="Include the Sheriff"
+                desc="Investigates exact role each night"
+                active={settings.hasSheriff}
+                onToggle={() => updateSettings({ hasSheriff: !settings.hasSheriff })}
+              />
+              <RoleToggle
+                icon={<Bone className="w-4 h-4" />}
+                title="Include the Gravedigger"
+                desc="Learns exact role of dead players"
+                active={settings.hasGravedigger}
+                onToggle={() => updateSettings({ hasGravedigger: !settings.hasGravedigger })}
+              />
+              <RoleToggle
+                icon={<ScanEye className="w-4 h-4" />}
+                title="Include the Lycan"
+                desc="Appears as werewolf to investigators"
+                active={settings.hasLycan}
+                onToggle={() => updateSettings({ hasLycan: !settings.hasLycan })}
+              />
+              <RoleToggle
+                icon={<Crown className="w-4 h-4" />}
+                title="Include the Prince"
+                desc="Survives first vote elimination"
+                active={settings.hasPrince}
+                onToggle={() => updateSettings({ hasPrince: !settings.hasPrince })}
+              />
+            </div>
+            <div className="mt-4 space-y-2">
+              <p className="text-text-secondary text-sm mb-2 flex items-center gap-2">
                 <Skull className="w-4 h-4 text-werewolf-red" /> Wolf Pack Roles
               </p>
               <RoleToggle
@@ -244,6 +305,95 @@ export default function LobbyScreen() {
                 desc="Appears as a Villager but wins with the Werewolves"
                 active={settings.hasMinion}
                 onToggle={() => updateSettings({ hasMinion: !settings.hasMinion })}
+              />
+              <RoleToggle
+                icon={<Eye className="w-4 h-4" />}
+                title="Include the Mystic Wolf"
+                desc="Can investigate like the Seer"
+                active={settings.hasMysticWolf}
+                onToggle={() => updateSettings({ hasMysticWolf: !settings.hasMysticWolf })}
+              />
+              <RoleToggle
+                icon={<Bone className="w-4 h-4" />}
+                title="Include the Wolf Cub"
+                desc="An extra werewolf for the pack"
+                active={settings.hasWolfCub}
+                onToggle={() => updateSettings({ hasWolfCub: !settings.hasWolfCub })}
+              />
+            </div>
+            <div className="mt-4 space-y-2">
+              <p className="text-text-secondary text-sm mb-2 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent-gold" /> More Special Roles
+              </p>
+              <RoleToggle
+                icon={<Ghost className="w-4 h-4" />}
+                title="Include the Medium"
+                desc="Sees dead chat and investigates dead players"
+                active={settings.hasMedium}
+                onToggle={() => updateSettings({ hasMedium: !settings.hasMedium })}
+              />
+              <RoleToggle
+                icon={<Vote className="w-4 h-4" />}
+                title="Include the Mayor"
+                desc="Vote counts as two during the day"
+                active={settings.hasMayor}
+                onToggle={() => updateSettings({ hasMayor: !settings.hasMayor })}
+              />
+              <RoleToggle
+                icon={<Swords className="w-4 h-4" />}
+                title="Include the Vigilante"
+                desc="One-time night kill ability"
+                active={settings.hasVigilante}
+                onToggle={() => updateSettings({ hasVigilante: !settings.hasVigilante })}
+              />
+              <RoleToggle
+                icon={<HeartPulse className="w-4 h-4" />}
+                title="Include the Doctor"
+                desc="Heals one player each night"
+                active={settings.hasDoctor}
+                onToggle={() => updateSettings({ hasDoctor: !settings.hasDoctor })}
+              />
+              <RoleToggle
+                icon={<Search className="w-4 h-4" />}
+                title="Include the Sheriff"
+                desc="Exact role investigation each night"
+                active={settings.hasSheriff}
+                onToggle={() => updateSettings({ hasSheriff: !settings.hasSheriff })}
+              />
+              <RoleToggle
+                icon={<Archive className="w-4 h-4" />}
+                title="Include the Gravedigger"
+                desc="Auto-learns dead role at dawn"
+                active={settings.hasGravedigger}
+                onToggle={() => updateSettings({ hasGravedigger: !settings.hasGravedigger })}
+              />
+              <RoleToggle
+                icon={<ScanEye className="w-4 h-4" />}
+                title="Include the Mystic Wolf"
+                desc="Investigates like the Seer"
+                active={settings.hasMysticWolf}
+                onToggle={() => updateSettings({ hasMysticWolf: !settings.hasMysticWolf })}
+              />
+              <RoleToggle
+                icon={<Bone className="w-4 h-4" />}
+                title="Include the Wolf Cub"
+                desc="Basic werewolf"
+                active={settings.hasWolfCub}
+                onToggle={() => updateSettings({ hasWolfCub: !settings.hasWolfCub })}
+              />
+              <RoleToggle
+                icon={<Eclipse className="w-4 h-4" />}
+                title="Include the Lycan"
+                desc="Appears as wolf to investigations"
+                active={settings.hasLycan}
+                onToggle={() => updateSettings({ hasLycan: !settings.hasLycan })}
+              />
+              <RoleToggle
+                icon={<Gem className="w-4 h-4" />}
+                title="Include the Prince"
+                desc="Survives first vote elimination"
+                active={settings.hasPrince}
+                onToggle={() => updateSettings({ hasPrince: !settings.hasPrince })}
               />
             </div>
           </motion.div>

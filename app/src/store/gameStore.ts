@@ -19,6 +19,16 @@ const defaultSettings: GameSettings = {
   hasAlphaWolf: true,
   hasSorcerer: true,
   hasMinion: true,
+  hasMedium: true,
+  hasMayor: true,
+  hasVigilante: true,
+  hasDoctor: true,
+  hasSheriff: true,
+  hasGravedigger: true,
+  hasMysticWolf: true,
+  hasWolfCub: true,
+  hasLycan: true,
+  hasPrince: true,
   nightTimerSeconds: 60,
   discussionTimerSeconds: 120,
 };
@@ -31,6 +41,10 @@ const defaultState: GameState = {
   humanPlayerId: '',
   nightActionTarget: null,
   seerCheckResult: null,
+  sheriffCheckResult: null,
+  gravediggerResult: null,
+  mediumCheckResult: null,
+  mysticWolfResult: null,
   sorcererCheckResult: null,
   votes: {},
   lastKilled: null,
@@ -40,6 +54,8 @@ const defaultState: GameState = {
   isProcessingAI: false,
   executionResult: null,
   chatMessages: [],
+  deadChatMessages: [],
+  whispers: [],
   dawnReady: {},
   skipVotes: {},
   bodyguardTarget: null,
@@ -49,6 +65,13 @@ const defaultState: GameState = {
   witchPoisonTarget: null,
   hunterTarget: null,
   alphaWolfTarget: null,
+  vigilanteTarget: null,
+  vigilanteUsed: false,
+  doctorTarget: null,
+  mediumTarget: null,
+  sheriffTarget: null,
+  mysticWolfTarget: null,
+  princeSurvived: false,
   mode: 'local',
   roomCode: null,
   isHost: false,
@@ -69,11 +92,18 @@ export const useGameStore = create<{
   submitWitchAction: (healTarget: string | null, poisonTarget: string | null) => void;
   submitSorcererAction: (targetId: string) => void;
   submitAlphaWolfAction: (targetId: string) => void;
+  submitVigilanteAction: (targetId: string) => void;
+  submitDoctorAction: (targetId: string) => void;
+  submitSheriffAction: (targetId: string) => void;
+  submitMediumAction: (targetId: string) => void;
+  submitMysticWolfAction: (targetId: string) => void;
   processNight: () => void;
   startDay: () => void;
   setDawnReady: () => void;
   castVote: (targetId: string) => void;
   sendChat: (message: string) => void;
+  sendDeadChat: (message: string) => void;
+  sendWhisper: (targetId: string, message: string) => void;
   aiAutoChat: () => void;
   voteSkipDiscussion: () => void;
   nextRound: () => void;
@@ -106,6 +136,16 @@ export const useGameStore = create<{
       hasAlphaWolf: settings.hasAlphaWolf,
       hasSorcerer: settings.hasSorcerer,
       hasMinion: settings.hasMinion,
+      hasMedium: settings.hasMedium,
+      hasMayor: settings.hasMayor,
+      hasVigilante: settings.hasVigilante,
+      hasDoctor: settings.hasDoctor,
+      hasSheriff: settings.hasSheriff,
+      hasGravedigger: settings.hasGravedigger,
+      hasMysticWolf: settings.hasMysticWolf,
+      hasWolfCub: settings.hasWolfCub,
+      hasLycan: settings.hasLycan,
+      hasPrince: settings.hasPrince,
     });
     const aiNames = getAiNames(settings.playerCount - 1);
 
@@ -130,12 +170,18 @@ export const useGameStore = create<{
         humanPlayerId: humanId,
         nightActionTarget: null,
         seerCheckResult: null,
+        sheriffCheckResult: null,
+        gravediggerResult: null,
+        mediumCheckResult: null,
+        mysticWolfResult: null,
         sorcererCheckResult: null,
         votes: {},
         lastKilled: null,
         winner: null,
         executionResult: null,
         chatMessages: [],
+        deadChatMessages: [],
+        whispers: [],
         dawnReady: {},
         skipVotes: {},
         bodyguardTarget: null,
@@ -145,6 +191,13 @@ export const useGameStore = create<{
         witchPoisonTarget: null,
         hunterTarget: null,
         alphaWolfTarget: null,
+        vigilanteTarget: null,
+        vigilanteUsed: false,
+        doctorTarget: null,
+        mediumTarget: null,
+        sheriffTarget: null,
+        mysticWolfTarget: null,
+        princeSurvived: false,
         logs: [makeLog(1, `Game started with ${settings.playerCount} players.`, 'system')],
       },
     };
@@ -165,6 +218,10 @@ export const useGameStore = create<{
         phase: 'night',
         nightActionTarget: null,
         seerCheckResult: null,
+        sheriffCheckResult: null,
+        gravediggerResult: null,
+        mediumCheckResult: null,
+        mysticWolfResult: null,
         sorcererCheckResult: null,
         votes: {},
         executionResult: null,
@@ -173,6 +230,11 @@ export const useGameStore = create<{
         witchPoisonTarget: null,
         hunterTarget: null,
         alphaWolfTarget: null,
+        vigilanteTarget: null,
+        doctorTarget: null,
+        mediumTarget: null,
+        sheriffTarget: null,
+        mysticWolfTarget: null,
         dawnReady: {},
         skipVotes: {},
         logs,
@@ -205,6 +267,8 @@ export const useGameStore = create<{
       getSocket()?.emit('bodyguardAction', targetId);
       return { state: { ...d.state, bodyguardTarget: targetId } };
     }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
     return { state: { ...d.state, bodyguardTarget: targetId } };
   }),
 
@@ -213,6 +277,8 @@ export const useGameStore = create<{
       getSocket()?.emit('witchAction', { healTarget, poisonTarget });
       return { state: { ...d.state, witchHealTarget: healTarget, witchPoisonTarget: poisonTarget } };
     }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
     return { state: { ...d.state, witchHealTarget: healTarget, witchPoisonTarget: poisonTarget } };
   }),
 
@@ -239,23 +305,86 @@ export const useGameStore = create<{
       getSocket()?.emit('alphaWolfAction', targetId);
       return { state: { ...d.state, alphaWolfTarget: targetId } };
     }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
     return { state: { ...d.state, alphaWolfTarget: targetId } };
+  }),
+
+  submitVigilanteAction: targetId => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('vigilanteAction', targetId);
+      return { state: { ...d.state, vigilanteTarget: targetId } };
+    }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
+    return { state: { ...d.state, vigilanteTarget: targetId } };
+  }),
+
+  submitDoctorAction: targetId => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('doctorAction', targetId);
+      return { state: { ...d.state, doctorTarget: targetId } };
+    }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
+    return { state: { ...d.state, doctorTarget: targetId } };
+  }),
+
+  submitSheriffAction: targetId => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('sheriffAction', targetId);
+      return { state: { ...d.state, sheriffTarget: targetId } };
+    }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
+    const target = d.state.players.find(p => p.id === targetId);
+    const sheriffResult = target ? { playerId: target.id, role: target.role } : null;
+    return { state: { ...d.state, sheriffTarget: targetId, sheriffCheckResult: sheriffResult } };
+  }),
+
+  submitMediumAction: targetId => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('mediumAction', targetId);
+      return { state: { ...d.state, mediumTarget: targetId } };
+    }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
+    const target = d.state.players.find(p => p.id === targetId);
+    const mediumResult = target ? { playerId: target.id, role: target.role } : null;
+    return { state: { ...d.state, mediumTarget: targetId, mediumCheckResult: mediumResult } };
+  }),
+
+  submitMysticWolfAction: targetId => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('mysticWolfAction', targetId);
+      return { state: { ...d.state, mysticWolfTarget: targetId } };
+    }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
+    const target = d.state.players.find(p => p.id === targetId);
+    if (target) {
+      const shownFaction = target.role === 'minion' ? 'village' : target.faction;
+      return { state: { ...d.state, mysticWolfTarget: targetId, mysticWolfResult: { playerId: target.id, faction: shownFaction } } };
+    }
+    return { state: { ...d.state, mysticWolfTarget: targetId } };
   }),
 
   processNight: () => set(d => {
     if (d.state.mode === 'online') return d;
-    const { players, humanPlayerId, settings, round, nightActionTarget, bodyguardTarget, witchHealTarget, witchPoisonTarget, witchHealUsed, witchPoisonUsed, alphaWolfTarget, sorcererCheckResult } = d.state;
+    const { players, humanPlayerId, settings, round, nightActionTarget, bodyguardTarget, witchHealTarget, witchPoisonTarget, witchHealUsed, witchPoisonUsed, alphaWolfTarget, sorcererCheckResult, vigilanteTarget, vigilanteUsed, doctorTarget } = d.state;
     let newPlayers = [...players];
     const newLogs = [...d.state.logs];
     let seerResult = d.state.seerCheckResult;
     let killed: Player | null = null;
     let witchKilled: Player | null = null;
+    let vigilanteKilled: Player | null = null;
+    let gravediggerResult = d.state.gravediggerResult;
 
     const alivePlayers = newPlayers.filter(p => p.isAlive);
 
     // Werewolf target selection
     let werewolfTarget: string | null = null;
-    const werewolves = alivePlayers.filter(p => p.role === 'werewolf' || p.role === 'alphaWolf');
+    const werewolves = alivePlayers.filter(p => p.role === 'werewolf' || p.role === 'alphaWolf' || p.role === 'wolfCub');
     const alphaWolves = alivePlayers.filter(p => p.role === 'alphaWolf');
 
     if (werewolves.length > 0) {
@@ -302,12 +431,50 @@ export const useGameStore = create<{
       }
     }
 
+    // Sheriff checks (AI)
+    const sheriffs = alivePlayers.filter(p => p.role === 'sheriff');
+    for (const sheriff of sheriffs) {
+      if (sheriff.isHuman) continue;
+      const checkTarget = aiNightAction(sheriff, newPlayers, settings.aiDifficulty);
+      if (checkTarget) {
+        // AI sheriff stores info implicitly
+      }
+    }
+
+    // Medium checks (AI)
+    const mediums = alivePlayers.filter(p => p.role === 'medium');
+    for (const medium of mediums) {
+      if (medium.isHuman) continue;
+      const checkTarget = aiNightAction(medium, newPlayers, settings.aiDifficulty);
+      if (checkTarget) {
+        // AI medium stores info implicitly
+      }
+    }
+
+    // Mystic Wolf checks (AI)
+    const mysticWolves = alivePlayers.filter(p => p.role === 'mysticWolf');
+    for (const mw of mysticWolves) {
+      if (mw.isHuman) continue;
+      const checkTarget = aiNightAction(mw, newPlayers, settings.aiDifficulty);
+      if (checkTarget) {
+        // AI mystic wolf stores info implicitly
+      }
+    }
+
     // Bodyguard action (AI)
     let bgTarget = bodyguardTarget;
     const bodyguards = alivePlayers.filter(p => p.role === 'bodyguard');
     for (const bg of bodyguards) {
       if (bg.isHuman) continue;
       bgTarget = aiNightAction(bg, newPlayers, settings.aiDifficulty);
+    }
+
+    // Doctor action (AI)
+    let docTarget = doctorTarget;
+    const doctors = alivePlayers.filter(p => p.role === 'doctor');
+    for (const doc of doctors) {
+      if (doc.isHuman) continue;
+      docTarget = aiNightAction(doc, newPlayers, settings.aiDifficulty);
     }
 
     // Witch actions (AI)
@@ -325,7 +492,15 @@ export const useGameStore = create<{
       }
     }
 
-    // Apply werewolf kill (check bodyguard and witch heal)
+    // Vigilante action (AI)
+    let vigTarget = vigilanteTarget;
+    const vigilantes = alivePlayers.filter(p => p.role === 'vigilante');
+    for (const vig of vigilantes) {
+      if (vig.isHuman) continue;
+      vigTarget = aiNightAction(vig, newPlayers, settings.aiDifficulty);
+    }
+
+    // Apply werewolf kill (check bodyguard, witch heal, and doctor heal)
     let werewolfKillBlocked = false;
     if (werewolfTarget) {
       if (bgTarget === werewolfTarget) {
@@ -335,6 +510,10 @@ export const useGameStore = create<{
       if (witchHeal === werewolfTarget && !witchHealUsed) {
         werewolfKillBlocked = true;
         newLogs.push(makeLog(round, 'The Witch used her healing potion to save someone!', 'action'));
+      }
+      if (docTarget === werewolfTarget) {
+        werewolfKillBlocked = true;
+        newLogs.push(makeLog(round, 'The Doctor saved someone from death!', 'action'));
       }
 
       if (!werewolfKillBlocked) {
@@ -351,13 +530,34 @@ export const useGameStore = create<{
     if (witchPoison && !witchPoisonUsed) {
       const poisonIdx = newPlayers.findIndex(p => p.id === witchPoison);
       if (poisonIdx !== -1 && newPlayers[poisonIdx].isAlive) {
-        newPlayers[poisonIdx] = { ...newPlayers[poisonIdx], isAlive: false };
-        witchKilled = newPlayers[poisonIdx];
-        newLogs.push(makeLog(round, `${witchKilled.name} was found poisoned this morning.`, 'death'));
+        if (docTarget === witchPoison) {
+          newLogs.push(makeLog(round, 'The Doctor saved someone from the Witch\'s poison!', 'action'));
+        } else {
+          newPlayers[poisonIdx] = { ...newPlayers[poisonIdx], isAlive: false };
+          witchKilled = newPlayers[poisonIdx];
+          newLogs.push(makeLog(round, `${witchKilled.name} was found poisoned this morning.`, 'death'));
+        }
       }
     }
 
+    // Apply vigilante kill
+    let newVigilanteUsed = vigilanteUsed;
+    if (vigTarget && !vigilanteUsed) {
+      const vigIdx = newPlayers.findIndex(p => p.id === vigTarget);
+      if (vigIdx !== -1 && newPlayers[vigIdx].isAlive) {
+        if (docTarget === vigTarget) {
+          newLogs.push(makeLog(round, 'The Doctor saved someone from the Vigilante!', 'action'));
+        } else {
+          newPlayers[vigIdx] = { ...newPlayers[vigIdx], isAlive: false };
+          vigilanteKilled = newPlayers[vigIdx];
+          newLogs.push(makeLog(round, `${vigilanteKilled.name} was found shot by a Vigilante this morning.`, 'death'));
+        }
+      }
+      newVigilanteUsed = true;
+    }
+
     // Hunter night revenge
+    const anyNightKilled = killed || witchKilled || vigilanteKilled;
     if (killed && killed.role === 'hunter') {
       const hunterRevengeTargets = newPlayers.filter(p => p.isAlive && p.id !== killed.id);
       if (hunterRevengeTargets.length > 0) {
@@ -370,10 +570,19 @@ export const useGameStore = create<{
       }
     }
 
-    if (!killed && !witchKilled && !werewolfKillBlocked) {
+    if (!anyNightKilled && !werewolfKillBlocked) {
       newLogs.push(makeLog(round, 'The night was peaceful. No one died.', 'system'));
-    } else if (!killed && !witchKilled && werewolfKillBlocked) {
+    } else if (!anyNightKilled && werewolfKillBlocked) {
       newLogs.push(makeLog(round, 'The night was peaceful thanks to a protector.', 'system'));
+    }
+
+    // Gravedigger auto-reveal
+    if (killed) {
+      gravediggerResult = { playerId: killed.id, role: killed.role };
+    } else if (witchKilled) {
+      gravediggerResult = { playerId: witchKilled.id, role: witchKilled.role };
+    } else if (vigilanteKilled) {
+      gravediggerResult = { playerId: vigilanteKilled.id, role: vigilanteKilled.role };
     }
 
     // Track witch potion usage
@@ -393,6 +602,8 @@ export const useGameStore = create<{
           winner,
           witchHealUsed: newWitchHealUsed,
           witchPoisonUsed: newWitchPoisonUsed,
+          vigilanteUsed: newVigilanteUsed,
+          gravediggerResult,
         },
       };
     }
@@ -408,6 +619,8 @@ export const useGameStore = create<{
         logs: newLogs,
         witchHealUsed: newWitchHealUsed,
         witchPoisonUsed: newWitchPoisonUsed,
+        vigilanteUsed: newVigilanteUsed,
+        gravediggerResult,
       },
     };
   }),
@@ -476,6 +689,71 @@ export const useGameStore = create<{
     return { state: { ...d.state, chatMessages, logs } };
   }),
 
+  sendDeadChat: message => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('deadChat', message);
+      return d;
+    }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !message.trim()) return d;
+    if (human.isAlive && human.role !== 'medium') return d;
+
+    const deadChatMessages = [...(d.state.deadChatMessages || []), {
+      id: `dead-${Date.now()}`,
+      senderId: human.id,
+      senderName: human.name,
+      message: message.trim(),
+      round: d.state.round,
+    }];
+    const logs = [...d.state.logs, makeLog(d.state.round, `${human.name} (dead chat): ${message.trim()}`, 'chat')];
+
+    // AI dead chat responses from dead AI players occasionally
+    const deadAI = d.state.players.filter(p => !p.isAlive && !p.isHuman);
+    const deadResponses = [
+      'I knew it...',
+      'The wolves got me.',
+      'Trust no one.',
+      'I had so much more to give!',
+      'Watch out for the quiet ones.',
+    ];
+    for (const ai of deadAI) {
+      if (Math.random() < 0.3) {
+        const msg = deadResponses[Math.floor(Math.random() * deadResponses.length)];
+        deadChatMessages.push({
+          id: `dead-${Date.now()}-${ai.id}`,
+          senderId: ai.id,
+          senderName: ai.name,
+          message: msg,
+          round: d.state.round,
+        });
+        logs.push(makeLog(d.state.round, `${ai.name} (dead chat): ${msg}`, 'chat'));
+      }
+    }
+
+    return { state: { ...d.state, deadChatMessages, logs } };
+  }),
+
+  sendWhisper: (targetId, message) => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('whisper', { targetId, message });
+      return d;
+    }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive || !message.trim()) return d;
+    if (d.state.phase !== 'day') return d;
+    const target = d.state.players.find(p => p.id === targetId);
+    if (!target || !target.isAlive) return d;
+
+    const whispers = [...(d.state.whispers || []), {
+      id: `whisper-${Date.now()}`,
+      senderId: human.id,
+      senderName: human.name,
+      message: message.trim(),
+      round: d.state.round,
+    }];
+    return { state: { ...d.state, whispers } };
+  }),
+
   aiAutoChat: () => set(d => {
     if (d.state.mode === 'online') return d;
     const aliveAI = d.state.players.filter(p => p.isAlive && !p.isHuman);
@@ -530,6 +808,8 @@ export const useGameStore = create<{
       getSocket()?.emit('vote', targetId);
       return { state: { ...d.state, votes: { ...d.state.votes, [d.state.humanPlayerId]: targetId } } };
     }
+    const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
+    if (!human || !human.isAlive) return d;
     const voterId = d.state.humanPlayerId;
     const newVotes = { ...d.state.votes, [voterId]: targetId };
     const logs = [...d.state.logs, makeLog(d.state.round, `You voted to eliminate ${d.state.players.find(p => p.id === targetId)?.name}.`, 'vote')];
@@ -550,7 +830,9 @@ export const useGameStore = create<{
       }
     }
 
-    const { eliminated, voteCounts } = tallyVotes(aiVotes, d.state.players);
+    const mayor = d.state.players.find(p => p.isAlive && p.role === 'mayor');
+    const mayorId = mayor ? mayor.id : null;
+    const { eliminated, voteCounts } = tallyVotes(aiVotes, d.state.players, mayorId);
     let newPlayers = [...d.state.players];
     let newLogs = [...aiLogs];
     let winner: Faction | null = null;
@@ -558,6 +840,30 @@ export const useGameStore = create<{
     if (eliminated) {
       const idx = newPlayers.findIndex(p => p.id === eliminated.id);
       if (idx !== -1) {
+        // Prince survival
+        if (eliminated.role === 'prince' && !d.state.princeSurvived) {
+          newLogs.push(makeLog(d.state.round, 'The Prince revealed himself and survived the vote!', 'system'));
+          winner = checkWinCondition(newPlayers);
+          return {
+            state: {
+              ...d.state,
+              players: newPlayers,
+              votes: aiVotes,
+              logs: newLogs,
+              winner,
+              executionResult: {
+                eliminated: null,
+                voteCounts,
+                wasTie: false,
+                noVotes: Object.keys(aiVotes).length === 0,
+              },
+              screen: winner ? 'game-over' : 'execution',
+              phase: winner ? 'game-over' : 'execution',
+              princeSurvived: true,
+            },
+          };
+        }
+
         newPlayers[idx] = { ...newPlayers[idx], isAlive: false };
         newLogs.push(makeLog(d.state.round, `${eliminated.name} was eliminated. They were a ${eliminated.role.toUpperCase()}!`, 'death'));
 
@@ -621,6 +927,17 @@ export const useGameStore = create<{
         witchPoisonTarget: null,
         hunterTarget: null,
         alphaWolfTarget: null,
+        vigilanteTarget: null,
+        vigilanteUsed: false,
+        doctorTarget: null,
+        mediumTarget: null,
+        sheriffTarget: null,
+        mysticWolfTarget: null,
+        princeSurvived: false,
+        sheriffCheckResult: null,
+        gravediggerResult: null,
+        mediumCheckResult: null,
+        mysticWolfResult: null,
       },
     };
   }),
