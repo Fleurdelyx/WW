@@ -86,7 +86,7 @@ export default function NightScreen() {
     }
 
     setPhase('processing');
-    processNight();
+    setTimeout(() => processNight(), 100);
   }, [processNight, submitNightAction, submitBodyguardAction, submitWitchAction, submitSorcererAction, submitAlphaWolfAction, submitVigilanteAction, submitDoctorAction, submitSheriffAction, submitMediumAction, submitMysticWolfAction, isOnline, human?.role, noAction, state.vigilanteUsed]);
 
   useEffect(() => {
@@ -713,6 +713,30 @@ export default function NightScreen() {
           </>
         )}
       </div>
+
+      {/* Full-screen processing overlay */}
+      {phase === 'processing' && (
+        <motion.div
+          className="absolute inset-0 bg-bg-primary/90 backdrop-blur-sm flex flex-col items-center justify-center z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <motion.div
+            className="w-16 h-16 border-4 border-accent-purple/30 border-t-accent-gold rounded-full"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+          <motion.p
+            className="mt-6 text-accent-gold text-lg font-medium"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            The wolves are hunting...
+          </motion.p>
+          <p className="mt-2 text-text-muted text-sm">Processing night actions</p>
+        </motion.div>
+      )}
     </div>
   );
 }

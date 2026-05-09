@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import type { Player } from '@/types/game';
 import PlayerAvatar from './PlayerAvatar';
-import { Skull, Vote, ShieldCheck, Crown } from 'lucide-react';
+import { Skull, Vote, ShieldCheck, Crown, Check, FastForward } from 'lucide-react';
 
 interface AnimatedPlayerCardProps {
   player: Player;
@@ -14,6 +14,8 @@ interface AnimatedPlayerCardProps {
   disabled?: boolean;
   tooltip?: string;
   isMayor?: boolean;
+  hasVoted?: boolean;
+  hasSkipped?: boolean;
 }
 
 export default function AnimatedPlayerCard({
@@ -27,6 +29,8 @@ export default function AnimatedPlayerCard({
   disabled = false,
   tooltip,
   isMayor = false,
+  hasVoted = false,
+  hasSkipped = false,
 }: AnimatedPlayerCardProps) {
   return (
     <div className="group relative w-full">
@@ -132,6 +136,30 @@ export default function AnimatedPlayerCard({
               transition={{ type: 'spring', stiffness: 500 }}
             >
               {voteCount}
+            </motion.div>
+          )}
+
+          {/* Voted checkmark */}
+          {hasVoted && (
+            <motion.div
+              className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 text-white rounded-full flex items-center justify-center z-10"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 500 }}
+            >
+              <Check className="w-3 h-3" />
+            </motion.div>
+          )}
+
+          {/* Skip vote indicator */}
+          {hasSkipped && (
+            <motion.div
+              className="absolute -bottom-1 -left-1 w-5 h-5 bg-accent-purple text-white rounded-full flex items-center justify-center z-10"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 500 }}
+            >
+              <FastForward className="w-3 h-3" />
             </motion.div>
           )}
         </div>

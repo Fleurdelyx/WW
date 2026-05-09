@@ -39,6 +39,7 @@ export default function GameOverScreen() {
   const isOnline = mode === 'online';
 
   const [showConfetti, setShowConfetti] = useState(false);
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setShowConfetti(true), 500);
@@ -48,6 +49,7 @@ export default function GameOverScreen() {
   const handlePlayAgain = () => {
     if (isOnline) {
       playerReady();
+      setWaiting(true);
     } else {
       createGame();
     }
@@ -240,6 +242,28 @@ export default function GameOverScreen() {
           </motion.button>
         </motion.div>
       </motion.div>
+
+      {/* Waiting overlay */}
+      {waiting && (
+        <motion.div
+          className="absolute inset-0 bg-bg-primary/80 backdrop-blur-sm flex flex-col items-center justify-center z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <motion.div
+            className="w-12 h-12 border-4 border-accent-purple/30 border-t-accent-gold rounded-full"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+          <motion.p
+            className="mt-4 text-accent-gold font-medium"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            Waiting for other players...
+          </motion.p>
+        </motion.div>
+      )}
     </div>
   );
 }

@@ -14,6 +14,7 @@ export default function RoleRevealScreen() {
   const humanPlayer = state.players.find(p => p.id === state.humanPlayerId);
   const [phase, setPhase] = useState<RevealPhase>('wheel');
   const [showContinue, setShowContinue] = useState(false);
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => {
     if (phase === 'revealing') {
@@ -29,6 +30,7 @@ export default function RoleRevealScreen() {
   const handleContinue = () => {
     if (state.mode === 'online') {
       playerReady();
+      setWaiting(true);
     } else {
       startNight();
     }
@@ -168,6 +170,28 @@ export default function RoleRevealScreen() {
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* Waiting overlay */}
+      {waiting && (
+        <motion.div
+          className="absolute inset-0 bg-bg-primary/80 backdrop-blur-sm flex flex-col items-center justify-center z-50"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <motion.div
+            className="w-12 h-12 border-4 border-accent-purple/30 border-t-accent-gold rounded-full"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+          />
+          <motion.p
+            className="mt-4 text-accent-gold font-medium"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            Waiting for other players...
+          </motion.p>
+        </motion.div>
+      )}
     </div>
   );
 }

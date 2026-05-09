@@ -7,11 +7,12 @@ import RoleCard from '@/components/RoleCard';
 import ParticleBackground, { BloodSplatter, LightningFlash } from '@/components/ParticleBackground';
 
 export default function ExecutionScreen() {
-  const { state, nextRound, startNight } = useGameStore();
-  const { executionResult, players, round } = state;
+  const { state, nextRound, startNight, playerReady } = useGameStore();
+  const { executionResult, players, round, mode } = state;
   const [revealed, setRevealed] = useState(false);
   const [flash, setFlash] = useState(false);
   const [showBlood, setShowBlood] = useState(false);
+  const [waiting, setWaiting] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setRevealed(true), 2000);
@@ -31,6 +32,11 @@ export default function ExecutionScreen() {
   const { eliminated, voteCounts, wasTie, noVotes } = executionResult;
 
   const handleContinue = () => {
+    if (mode === 'online') {
+      playerReady();
+      setWaiting(true);
+      return;
+    }
     nextRound();
     setTimeout(() => startNight(), 100);
   };
@@ -217,6 +223,28 @@ export default function ExecutionScreen() {
                   Continue to Night {round + 1}
                 </motion.span>
               </motion.button>
+
+              {/* Waiting overlay */}
+              {waiting && (
+                <motion.div
+                  className="absolute inset-0 bg-bg-primary/80 backdrop-blur-sm flex flex-col items-center justify-center z-50 rounded-xl"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  <motion.div
+                    className="w-12 h-12 border-4 border-accent-purple/30 border-t-accent-gold rounded-full"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <motion.p
+                    className="mt-4 text-accent-gold font-medium"
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                  >
+                    Waiting for other players...
+                  </motion.p>
+                </motion.div>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
-import { Users, Crown, Play, ArrowLeft, Copy, Check, Eye, Shield, Crosshair, FlaskConical, Clock, MessageCircle, Settings2, Sparkles, Wifi, Wand2, VenetianMask, Skull, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem } from 'lucide-react';
+import { Users, Crown, Play, ArrowLeft, Copy, Check, Eye, Shield, Crosshair, FlaskConical, Clock, MessageCircle, Settings2, Sparkles, Wifi, Wand2, VenetianMask, Skull, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem, Lock, Moon } from 'lucide-react';
 import { useState } from 'react';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import ParticleBackground from '@/components/ParticleBackground';
@@ -252,6 +252,7 @@ export default function RoomScreen() {
                     </div>
                     <div className="space-y-2 mt-3">
                       <p className="text-text-muted text-[10px] uppercase tracking-wider mb-1">Wolf Pack</p>
+                      <RoleToggle icon={<Moon className="w-3 h-3" />} title="Werewolf" active={true} locked />
                       <RoleToggle icon={<Crown className="w-3 h-3" />} title="Alpha Wolf" active={settings.hasAlphaWolf} onToggle={() => updateSettings({ hasAlphaWolf: !settings.hasAlphaWolf })} />
                       <RoleToggle icon={<Wand2 className="w-3 h-3" />} title="Sorcerer" active={settings.hasSorcerer} onToggle={() => updateSettings({ hasSorcerer: !settings.hasSorcerer })} />
                       <RoleToggle icon={<VenetianMask className="w-3 h-3" />} title="Minion" active={settings.hasMinion} onToggle={() => updateSettings({ hasMinion: !settings.hasMinion })} />
@@ -295,26 +296,28 @@ export default function RoomScreen() {
   );
 }
 
-function RoleToggle({ icon, title, active, onToggle }: {
+function RoleToggle({ icon, title, active, onToggle, locked }: {
   icon: React.ReactNode;
   title: string;
   active: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
+  locked?: boolean;
 }) {
   return (
     <motion.button
-      onClick={onToggle}
-      whileHover={{ scale: 1.02, x: 2 }}
-      whileTap={{ scale: 0.98 }}
+      onClick={locked ? undefined : onToggle}
+      whileHover={locked ? {} : { scale: 1.02, x: 2 }}
+      whileTap={locked ? {} : { scale: 0.98 }}
       className={`w-full p-2 rounded-lg border text-left transition-all flex items-center justify-between ${
         active
           ? 'border-accent-purple bg-accent-purple/20'
           : 'border-accent-purple/20 bg-bg-primary/50'
-      }`}
+      } ${locked ? 'opacity-80 cursor-default' : ''}`}
     >
       <div className="flex items-center gap-2">
         <div className={active ? 'text-accent-purple' : 'text-text-muted'}>{icon}</div>
         <div className="text-text-primary text-xs font-medium">{title}</div>
+        {locked && <Lock className="w-3 h-3 text-text-muted" />}
       </div>
       <motion.div
         className={`w-4 h-4 rounded border flex items-center justify-center ${active ? 'bg-accent-purple border-accent-purple' : 'border-text-muted'}`}

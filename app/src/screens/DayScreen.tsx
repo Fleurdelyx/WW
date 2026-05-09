@@ -48,7 +48,7 @@ function ChatBubble({ msg, humanId, isWhisper, targetName }: { msg: { senderId: 
 
 export default function DayScreen() {
   const { state, castVote, sendChat, startVoting, voteSkipDiscussion, voteSkipElimination, aiAutoChat, sendWhisper, sendDeadChat } = useGameStore();
-  const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost, settings, skipVotes, deadChatMessages, whispers } = state;
+  const { players, humanPlayerId, logs, round, executionResult, chatMessages, mode, phase: gamePhase, isHost, settings, skipVotes, deadChatMessages, whispers, votes } = state;
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [localPhase, setLocalPhase] = useState<'discussion' | 'voting'>('discussion');
   const [chatInput, setChatInput] = useState('');
@@ -56,7 +56,6 @@ export default function DayScreen() {
   const [whisperTarget, setWhisperTarget] = useState<string | null>(null);
   const [whisperInput, setWhisperInput] = useState('');
   const [discussionTimer, setDiscussionTimer] = useState(settings.discussionTimerSeconds);
-  const [tensionShake, setTensionShake] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const chatLenRef = useRef(0);
@@ -77,16 +76,6 @@ export default function DayScreen() {
   const prevVoteCounts = executionResult?.voteCounts || {};
 
   const canSeeDeadChat = !human?.isAlive || human?.role === 'medium';
-
-  // Tension shake effect during voting
-  useEffect(() => {
-    if (phase === 'voting') {
-      const interval = setInterval(() => {
-        setTensionShake(Math.random() * 2 - 1);
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [phase]);
 
   // Discussion timer
   useEffect(() => {
@@ -199,6 +188,11 @@ export default function DayScreen() {
     }
   }, [skipCount, majority, phase, isOnline, addToast, startVoting]);
 
+  // Scroll to bottom when switching chat tabs
+  useEffect(() => {
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+  }, [showDeadChat]);
+
   // Periodic AI chat during discussion
   useEffect(() => {
     if (isOnline || phase !== 'discussion') return;
@@ -234,8 +228,6 @@ export default function DayScreen() {
   return (
     <motion.div
       className="min-h-screen bg-bg-primary flex flex-col relative"
-      animate={{ x: tensionShake }}
-      transition={{ duration: 0.1 }}
     >
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       <FogLayer />
@@ -312,6 +304,15 @@ export default function DayScreen() {
                     transition={{ type: 'spring' }}
                   />
                 </motion.div>
+                {skipCount > 0 && (
+                  <div className="flex -space-x-1">
+                    {alivePlayers.filter(p => skipVotes[p.id]).map(p => (
+                      <div key={p.id} className="w-4 h-4 rounded-full border border-bg-primary overflow-hidden">
+                        <PlayerAvatar avatar={p.avatar} size="sm" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             </div>
           ) : (
@@ -348,16 +349,16 @@ export default function DayScreen() {
                   index={i}
                   tooltip={getPlayerTooltip(player)}
                   isMayor={player.role === 'mayor' && isRoleRevealed(player)}
+                  hasVoted={phase === 'voting' && !!votes[player.id]}
+                  hasSkipped={!!skipVotes[player.id]}
                 />
                 {phase === 'discussion' && player.isAlive && player.id !== humanPlayerId && human?.isAlive && (
-                  <motion.button
+                  <button
                     onClick={(e) => { e.stopPropagation(); setWhisperTarget(player.id); }}
-                    className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-accent-purple/80 hover:bg-accent-purple text-white px-1.5 py-0.5 rounded-full z-10 opacity-0 group-hover:opacity-100 transition-opacity"
-                    whileHover={{ scale: 1.1 }}
-                    style={{ opacity: 1 }}
+                    className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-accent-purple/80 hover:bg-accent-purple hover:shadow-[0_0_8px_rgba(123,109,141,0.5)] text-white px-1.5 py-0.5 rounded-full z-10 opacity-0 group-hover:opacity-100 transition-all"
                   >
                     Whisper
-                  </motion.button>
+                  </button>
                 )}
               </div>
             ))}
