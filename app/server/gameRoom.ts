@@ -142,6 +142,17 @@ export class GameRoom {
 
   getPlayerCount() { return this.players.length; }
 
+  renamePlayer(playerId: string, newName: string): boolean {
+    const player = this.players.find(p => p.id === playerId);
+    if (!player) return false;
+    player.name = newName?.trim() || player.name;
+    return true;
+  }
+
+  updateSettings(newSettings: Partial<GameSettings>) {
+    this.settings = { ...this.settings, ...newSettings };
+  }
+
   startGame(settings?: Partial<GameSettings>) {
     if (settings) {
       this.settings = { ...this.settings, ...settings };

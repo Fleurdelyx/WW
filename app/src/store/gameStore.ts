@@ -124,7 +124,12 @@ export const useGameStore = create<{
 
   setScreen: screen => set(d => ({ state: { ...d.state, screen } })),
 
-  updateSettings: s => set(d => ({ state: { ...d.state, settings: { ...d.state.settings, ...s } } })),
+  updateSettings: s => set(d => {
+    if (d.state.mode === 'online' && d.state.isHost) {
+      getSocket()?.emit('updateSettings', s);
+    }
+    return { state: { ...d.state, settings: { ...d.state.settings, ...s } } };
+  }),
 
   createGame: () => set(d => {
     const settings = d.state.settings;

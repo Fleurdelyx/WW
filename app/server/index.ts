@@ -188,6 +188,37 @@ io.on('connection', (socket) => {
     broadcastRoomState(room);
   });
 
+  socket.on('rename', (newName: string) => {
+    const roomCode = socketToRoom.get(socket.id);
+    const playerId = socketToPlayerId.get(socket.id);
+    if (!roomCode || !playerId) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    if (room.phase !== 'lobby') return;
+
+    const trimmedName = newName.trim();
+    const resolvedName = trimmedName || `Player ${room.getPlayerCount()}`;
+    if (room.players.some(p => p.id !== playerId && p.name.toLowerCase() === resolvedName.toLowerCase())) {
+      socket.emit('error', { message: 'That name is already taken' });
+      return;
+    }
+
+    room.renamePlayer(playerId, trimmedName);
+    broadcastLobbyState(room);
+  });
+
+  socket.on('updateSettings', (newSettings: Partial<GameSettings>) => {
+    const roomCode = socketToRoom.get(socket.id);
+    if (!roomCode) return;
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    if (room.phase !== 'lobby') return;
+    if (room.hostId !== socket.id) return;
+
+    room.updateSettings(newSettings);
+    broadcastLobbyState(room);
+  });
+
   socket.on('nightAction', (targetId: string) => {
     const roomCode = socketToRoom.get(socket.id);
     const playerId = socketToPlayerId.get(socket.id);

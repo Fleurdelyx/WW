@@ -1,9 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGameStore } from '@/store/gameStore';
-import { Users, Crown, Play, ArrowLeft, Copy, Check, Eye, Shield, Crosshair, FlaskConical, Clock, MessageCircle, Settings2, Sparkles, Wifi, Wand2, VenetianMask, Skull, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem, Lock, Moon } from 'lucide-react';
+import { Users, Crown, Play, ArrowLeft, Copy, Check, Eye, Shield, Crosshair, FlaskConical, Clock, MessageCircle, Settings2, Sparkles, Wifi, Wand2, VenetianMask, Skull, Ghost, Vote, Swords, HeartPulse, Search, Archive, ScanEye, Bone, Eclipse, Gem, Lock, Moon, Pencil, X, CheckCheck } from 'lucide-react';
 import { useState } from 'react';
 import PlayerAvatar from '@/components/PlayerAvatar';
 import ParticleBackground from '@/components/ParticleBackground';
+import { getSocket } from '@/socket';
 
 export default function RoomScreen() {
   const { state, leaveRoom, startOnlineGame, updateSettings } = useGameStore();
@@ -117,44 +118,7 @@ export default function RoomScreen() {
             </motion.span>
           </div>
 
-          <div className="space-y-2">
-            <AnimatePresence mode="popLayout">
-              {players.map((player, i) => (
-                <motion.div
-                  key={player.id}
-                  layout
-                  initial={{ opacity: 0, x: -20, scale: 0.9 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: 20, scale: 0.9 }}
-                  transition={{ delay: i * 0.05, type: 'spring', stiffness: 300 }}
-                  className="flex items-center gap-3 bg-bg-primary/50 rounded-xl px-3 py-2.5 hover:bg-bg-primary/70 transition-colors"
-                >
-                  <motion.div whileHover={{ scale: 1.2, rotate: 10 }}>
-                    <PlayerAvatar avatar={player.avatar} size="sm" />
-                  </motion.div>
-                  <span className="text-text-primary text-sm font-medium flex-1">{player.name}</span>
-                  {player.id === state.humanPlayerId && (
-                    <motion.span
-                      className="text-xs text-accent-blue bg-accent-blue/10 px-2 py-0.5 rounded-full"
-                      animate={{ opacity: [0.7, 1, 0.7] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      You
-                    </motion.span>
-                  )}
-                  {i === 0 && (
-                    <motion.span
-                      className="flex items-center gap-1 text-xs text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded-full"
-                      animate={{ scale: [1, 1.05, 1] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      <Crown className="w-3 h-3" /> Host
-                    </motion.span>
-                  )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
+          <PlayerList players={players} humanPlayerId={state.humanPlayerId} mode={state.mode} />
         </motion.div>
 
         {/* Settings Panel */}
@@ -326,5 +290,100 @@ function RoleToggle({ icon, title, active, onToggle, locked }: {
         {active && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
       </motion.div>
     </motion.button>
+  );
+}
+
+function PlayerList({ players, humanPlayerId, mode }: { players: { id: string; name: string; avatar: { icon: string; bg: string; text: string; border: string } }[]; humanPlayerId: string; mode: string }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const socket = useGameStore(s => s.state.mode === 'online' ? null : null);
+
+  const handleStartEdit = (player: typeof players[0]) => {
+    setEditingId(player.id);
+    setEditName(player.name);
+  };
+
+  const handleSave = (playerId: string) => {
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      setEditingId(null);
+      return;
+    }
+    if (mode === 'online') {
+      getSocket()?.emit('rename', trimmed);
+    }
+    setEditingId(null);
+  };
+
+  return (
+    <div className="space-y-2">
+      <AnimatePresence mode="popLayout">
+        {players.map((player, i) => (
+          <motion.div
+            key={player.id}
+            layout
+            initial={{ opacity: 0, x: -20, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 20, scale: 0.9 }}
+            transition={{ delay: i * 0.05, type: 'spring', stiffness: 300 }}
+            className="flex items-center gap-3 bg-bg-primary/50 rounded-xl px-3 py-2.5 hover:bg-bg-primary/70 transition-colors"
+          >
+            <motion.div whileHover={{ scale: 1.2, rotate: 10 }}>
+              <PlayerAvatar avatar={player.avatar} size="sm" />
+            </motion.div>
+            {editingId === player.id ? (
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSave(player.id); if (e.key === 'Escape') setEditingId(null); }}
+                  onBlur={() => handleSave(player.id)}
+                  className="flex-1 bg-bg-primary border border-accent-purple/30 rounded-lg px-2 py-1 text-text-primary text-sm focus:border-accent-purple focus:outline-none"
+                  maxLength={20}
+                />
+                <button onClick={() => handleSave(player.id)} className="text-green-400 hover:text-green-300">
+                  <CheckCheck className="w-4 h-4" />
+                </button>
+                <button onClick={() => setEditingId(null)} className="text-text-muted hover:text-text-primary">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <>
+                <span className="text-text-primary text-sm font-medium flex-1">{player.name}</span>
+                {player.id === humanPlayerId && (
+                  <button
+                    onClick={() => handleStartEdit(player)}
+                    className="text-text-muted hover:text-accent-gold transition-colors"
+                    title="Rename"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </>
+            )}
+            {player.id === humanPlayerId && editingId !== player.id && (
+              <motion.span
+                className="text-xs text-accent-blue bg-accent-blue/10 px-2 py-0.5 rounded-full"
+                animate={{ opacity: [0.7, 1, 0.7] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                You
+              </motion.span>
+            )}
+            {i === 0 && editingId !== player.id && (
+              <motion.span
+                className="flex items-center gap-1 text-xs text-accent-gold bg-accent-gold/10 px-2 py-0.5 rounded-full"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              >
+                <Crown className="w-3 h-3" /> Host
+              </motion.span>
+            )}
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }
