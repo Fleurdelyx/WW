@@ -669,7 +669,7 @@ export const useGameStore = create<{
     const human = d.state.players.find(p => p.id === d.state.humanPlayerId);
     if (!human || !human.isAlive || !message.trim()) return d;
     const chatMessages = [...(d.state.chatMessages || []), {
-      id: `chat-${Date.now()}`,
+      id: `chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       senderId: human.id,
       senderName: human.name,
       message: message.trim(),
@@ -700,7 +700,7 @@ export const useGameStore = create<{
     if (human.isAlive && human.role !== 'medium') return d;
 
     const deadChatMessages = [...(d.state.deadChatMessages || []), {
-      id: `dead-${Date.now()}`,
+      id: `dead-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       senderId: human.id,
       senderName: human.name,
       message: message.trim(),
@@ -744,7 +744,7 @@ export const useGameStore = create<{
     if (!target || !target.isAlive) return d;
 
     const whispers = [...(d.state.whispers || []), {
-      id: `whisper-${Date.now()}`,
+      id: `whisper-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       senderId: human.id,
       senderName: human.name,
       targetId,
@@ -825,6 +825,26 @@ export const useGameStore = create<{
 
     if (skipCount >= majority) {
       const newLogs = [...d.state.logs, makeLog(d.state.round, 'The village could not decide. No one was eliminated.', 'system')];
+      const winner = checkWinCondition(d.state.players);
+      if (winner) {
+        return {
+          state: {
+            ...d.state,
+            phase: 'game-over',
+            screen: 'game-over',
+            skipVotes: {},
+            votes: {},
+            logs: newLogs,
+            winner,
+            executionResult: {
+              eliminated: null,
+              voteCounts: {},
+              wasTie: false,
+              noVotes: true,
+            },
+          },
+        };
+      }
       return {
         state: {
           ...d.state,
@@ -1050,7 +1070,11 @@ export const useGameStore = create<{
     getSocket()?.emit('playerReady');
   },
 
-  startVoting: () => {
-    getSocket()?.emit('startVoting');
-  },
+  startVoting: () => set(d => {
+    if (d.state.mode === 'online') {
+      getSocket()?.emit('startVoting');
+      return d;
+    }
+    return { state: { ...d.state, skipVotes: {} } };
+  }),
 }));

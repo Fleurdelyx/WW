@@ -104,7 +104,7 @@ export class GameRoom {
     this.players.push({
       socketId,
       id,
-      name: name || `Player ${this.players.length + 1}`,
+      name: name?.trim() || `Player ${this.players.length + 1}`,
       role: 'villager',
       faction: 'village',
       isAlive: true,
@@ -224,6 +224,10 @@ export class GameRoom {
 
   resetReady() {
     this.players.forEach(p => p.ready = false);
+  }
+
+  resetSkipVotes() {
+    this.players.forEach(p => p.skipVoted = false);
   }
 
   submitNightAction(playerId: string, targetId: string): boolean {
@@ -734,8 +738,15 @@ export class GameRoom {
       noVotes: true,
     };
     this.logs = newLogs;
-    this.phase = 'execution';
-    this.screen = 'execution';
+    const winner = checkWinCondition(this.players.map(p => this.toPublicPlayer(p)));
+    if (winner) {
+      this.phase = 'game-over';
+      this.screen = 'game-over';
+      this.winner = winner;
+    } else {
+      this.phase = 'execution';
+      this.screen = 'execution';
+    }
   }
 
   addChat(playerId: string, playerName: string, message: string) {
@@ -841,7 +852,7 @@ export class GameRoom {
     const aliveVillagers = this.players.filter(p => p.isAlive && getTrueFaction(p.role) === 'village').length;
 
     const skipVotes: Record<string, boolean> = {};
-    this.players.forEach(p => { if (p.skipVoted) skipVotes[p.id] = true; });
+    this.players.forEach(p => { if (p.isAlive && p.skipVoted) skipVotes[p.id] = true; });
 
     return {
       screen: this.screen,

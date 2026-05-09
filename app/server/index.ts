@@ -91,7 +91,8 @@ io.on('connection', (socket) => {
       return;
     }
     const trimmedName = name.trim();
-    if (room.players.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) {
+    const resolvedName = trimmedName || `Player ${room.getPlayerCount() + 1}`;
+    if (room.players.some(p => p.name.toLowerCase() === resolvedName.toLowerCase())) {
       socket.emit('error', { message: 'That name is already taken' });
       return;
     }
@@ -336,6 +337,7 @@ io.on('connection', (socket) => {
 
     room.phase = 'voting';
     room.screen = 'day';
+    room.resetSkipVotes();
     broadcastRoomState(room);
   });
 
@@ -350,6 +352,7 @@ io.on('connection', (socket) => {
     if (room.shouldSkipToVote()) {
       room.phase = 'voting';
       room.screen = 'day';
+      room.resetSkipVotes();
     }
     broadcastRoomState(room);
   });
@@ -375,6 +378,7 @@ io.on('connection', (socket) => {
     if (!roomCode || !playerId) return;
     const room = rooms.get(roomCode);
     if (!room) return;
+    if (room.phase !== 'voting') return;
 
     room.submitSkipVote(playerId);
     if (room.shouldSkipElimination()) {
@@ -421,6 +425,9 @@ io.on('connection', (socket) => {
 
     const player = room.players.find(p => p.id === playerId);
     if (!player || !player.isAlive) return;
+    if (room.phase !== 'day' && room.phase !== 'voting') return;
+    if (!message.trim()) return;
+    if (targetId === playerId) return;
 
     const target = room.players.find(p => p.id === targetId);
     if (!target || !target.isAlive) return;

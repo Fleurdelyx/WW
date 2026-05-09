@@ -96,6 +96,7 @@ export default function DayScreen() {
         if (t <= 1) {
           clearInterval(interval);
           if (!isOnline) {
+            startVoting();
             setLocalPhase('voting');
             addToast('Time is up! Voting begins.', 'system');
           }
@@ -124,9 +125,8 @@ export default function DayScreen() {
   };
 
   const handleStartVoting = () => {
-    if (isOnline) {
-      startVoting();
-    } else {
+    startVoting();
+    if (!isOnline) {
       setLocalPhase('voting');
       addToast('Voting has begun!', 'system');
     }
@@ -193,10 +193,11 @@ export default function DayScreen() {
 
   useEffect(() => {
     if (!isOnline && phase === 'discussion' && skipCount >= majority) {
+      startVoting();
       setLocalPhase('voting');
       addToast('Majority voted to skip! Voting begins.', 'system');
     }
-  }, [skipCount, majority, phase, isOnline, addToast]);
+  }, [skipCount, majority, phase, isOnline, addToast, startVoting]);
 
   // Periodic AI chat during discussion
   useEffect(() => {
